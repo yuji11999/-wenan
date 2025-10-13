@@ -1,0 +1,16 @@
+# 数据库配置（MySQL）
+DATABASE_URL="mysql://duanshipin:2mzjXCCfy47m7wzH@192.168.5.133:3306/duanshipin"
+
+# JWT 配置
+JWT_SECRET="your-secret-key-change-this-in-production-2024"
+JWT_EXPIRES_IN="7d"
+
+# 服务配置
+PORT=3002
+NODE_ENV=development
+
+# OpenAI 配置 (可选，如果没有可以在前端系统设置中配置)
+OPENAI_API_KEY=""
+OPENAI_BASE_URL="https://api.openai.com/v1"
+OPENAI_MODEL="gpt-3.5-turbo"
+
