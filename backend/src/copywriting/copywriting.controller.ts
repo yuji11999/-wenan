@@ -56,6 +56,11 @@ export class CopywritingController {
     return this.copywritingService.rewrite(req.user.id, rewriteDto, req.headers);
   }
 
+  @Post('save-rewrite')
+  saveRewrite(@Request() req, @Body() data: any) {
+    return this.copywritingService.saveRewrite(req.user.id, data);
+  }
+
   @Get()
   findAll(@Request() req, @Query() filters: any) {
     return this.copywritingService.findAll(req.user.id, filters);

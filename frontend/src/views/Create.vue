@@ -12,7 +12,7 @@
         <el-input
           v-model="referenceText"
           type="textarea"
-          :rows="15"
+          :autosize="{ minRows: 15, maxRows: 30 }"
           placeholder="粘贴参考文案..."
           class="textarea-input"
         />
@@ -38,7 +38,7 @@
         <el-input
           v-model="createText"
           type="textarea"
-          :rows="15"
+          :autosize="{ minRows: 15, maxRows: 30 }"
           placeholder="在这里创作你的原创文案..."
           class="textarea-input"
         />
@@ -462,7 +462,7 @@ loadMaterials()
 
 const analyzeReference = async () => {
   if (!referenceText.value.trim()) {
-    ElMessage.warning('请输入参考文案')
+    ElMessage.warning({ message: '请输入参考文案', duration: 2000 })
     return
   }
 
@@ -514,7 +514,7 @@ const analyzeReference = async () => {
 
 const analyzeCreate = async () => {
   if (!createText.value.trim()) {
-    ElMessage.warning('请输入创作文案')
+    ElMessage.warning({ message: '请输入创作文案', duration: 2000 })
     return
   }
 
@@ -567,7 +567,7 @@ const analyzeCreate = async () => {
 
 const saveCreate = async () => {
   if (!createText.value.trim()) {
-    ElMessage.warning('请输入创作文案')
+    ElMessage.warning({ message: '请输入创作文案', duration: 2000 })
     return
   }
 
@@ -611,7 +611,7 @@ const saveCreate = async () => {
 // 优化文案
 const optimizeCreate = async () => {
   if (!createText.value.trim()) {
-    ElMessage.warning('请输入需要优化的文案')
+    ElMessage.warning({ message: '请输入需要优化的文案', duration: 2000 })
     return
   }
 

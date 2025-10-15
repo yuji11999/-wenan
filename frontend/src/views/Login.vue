@@ -33,6 +33,12 @@
           />
         </el-form-item>
 
+        <el-form-item v-if="isLogin">
+          <el-checkbox v-model="formData.rememberMe">
+            记住密码
+          </el-checkbox>
+        </el-form-item>
+
         <el-form-item>
           <el-button
             type="primary"
@@ -79,8 +85,24 @@ const aiStore = useAIStore()
 
 const formData = reactive({
   username: '',
-  password: ''
+  password: '',
+  rememberMe: false
 })
+
+// 从 localStorage 读取记住的用户名和密码
+const loadRememberedCredentials = () => {
+  const rememberedUsername = localStorage.getItem('rememberedUsername')
+  const rememberedPassword = localStorage.getItem('rememberedPassword')
+  
+  if (rememberedUsername && rememberedPassword) {
+    formData.username = rememberedUsername
+    formData.password = rememberedPassword
+    formData.rememberMe = true
+  }
+}
+
+// 页面加载时读取记住的凭证
+loadRememberedCredentials()
 
 const rules: FormRules = {
   username: [
@@ -95,7 +117,15 @@ const rules: FormRules = {
 
 const toggleMode = () => {
   isLogin.value = !isLogin.value
+  // 切换模式时，保存记住密码的状态
+  const rememberMe = formData.rememberMe
   formRef.value?.resetFields()
+  formData.rememberMe = rememberMe
+  
+  // 如果切换回登录模式且有记住的密码，重新加载
+  if (isLogin.value && rememberMe) {
+    loadRememberedCredentials()
+  }
 }
 
 const handleSubmit = async () => {
@@ -122,6 +152,15 @@ const handleSubmit = async () => {
         // 使用 store 方法保存登录信息
         userStore.login(response.user, response.access_token)
 
+        // 根据"记住密码"选项保存或清除密码
+        if (formData.rememberMe) {
+          localStorage.setItem('rememberedUsername', formData.username)
+          localStorage.setItem('rememberedPassword', formData.password)
+        } else {
+          localStorage.removeItem('rememberedUsername')
+          localStorage.removeItem('rememberedPassword')
+        }
+
         ElMessage.success({ message: '登录成功', duration: 1500 })
         router.push('/dashboard')
       } else {
@@ -145,11 +184,11 @@ const handleSubmit = async () => {
       if (message.includes('账号已被锁定') || message.includes('剩余尝试次数')) {
         ElMessage.error({
           message,
-          duration: 5000,
+          duration: 3000,
           showClose: true
         })
       } else {
-        ElMessage.error(message)
+        ElMessage.error({ message, duration: 2000 })
       }
       
       // 如果是登录失败且有剩余次数提示，显示警告

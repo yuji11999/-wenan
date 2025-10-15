@@ -151,15 +151,110 @@
         </div>
       </div>
     </div>
+
+    <!-- 详情对话框 - 简洁版 -->
+    <el-dialog
+      v-model="detailDialogVisible"
+      title="文案详情"
+      width="800px"
+      :close-on-click-modal="false"
+      class="detail-dialog"
+    >
+      <div v-if="currentDetail" class="detail-content">
+        <!-- 标题 -->
+        <div class="title-section">
+          <h4 class="section-label">标题</h4>
+          <div class="title-text">{{ currentDetail.title }}</div>
+        </div>
+
+        <!-- 分隔线 -->
+        <div class="divider"></div>
+
+        <!-- 文案内容 -->
+        <div class="content-section">
+          <h4 class="section-label">文案</h4>
+          <div class="copywriting-content">
+            {{ currentDetail.content }}
+          </div>
+        </div>
+
+        <!-- 拆解信息（如果有） -->
+        <div v-if="currentDetail.analysis" class="analysis-section">
+          <h4 class="section-title">拆解分析</h4>
+          
+          <div class="analysis-list">
+            <div class="analysis-row" v-if="currentDetail.analysis.topic">
+              <span class="row-label">话题：</span>
+              <span class="row-value">{{ currentDetail.analysis.topic }}</span>
+            </div>
+
+            <div class="analysis-row" v-if="currentDetail.analysis.hook">
+              <span class="row-label">钩子：</span>
+              <span class="row-value">{{ currentDetail.analysis.hook }}</span>
+            </div>
+
+            <div class="analysis-row" v-if="currentDetail.analysis.goldenSentence">
+              <span class="row-label">金句：</span>
+              <span class="row-value">{{ currentDetail.analysis.goldenSentence }}</span>
+            </div>
+
+            <div class="analysis-row" v-if="currentDetail.analysis.adPlacement">
+              <span class="row-label">广告植入：</span>
+              <span class="row-value">{{ currentDetail.analysis.adPlacement }}</span>
+            </div>
+
+            <div class="analysis-row" v-if="currentDetail.analysis.analysisContent">
+              <span class="row-label">核心内容：</span>
+              <span class="row-value">{{ currentDetail.analysis.analysisContent }}</span>
+            </div>
+
+            <div class="analysis-row" v-if="currentDetail.analysis.tags && currentDetail.analysis.tags.length > 0">
+              <span class="row-label">标签：</span>
+              <span class="row-value">{{ currentDetail.analysis.tags.join('、') }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部信息栏 -->
+        <div class="detail-info">
+          <el-tag size="small" type="info">{{ categoryStore.getCategoryName(currentDetail.industry) }}</el-tag>
+          <el-tag size="small" :type="getSourceBadgeType(currentDetail.sourceType)">
+            {{ getSourceTypeLabel(currentDetail.sourceType) }}
+          </el-tag>
+          <span class="info-text">字数: {{ currentDetail.content.length }}</span>
+          <span class="info-text">{{ formatDate(currentDetail.createdAt) }}</span>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <!-- 查看视频按钮 - 只在有视频链接时显示 -->
+          <el-button 
+            v-if="currentDetail?.videoUrl" 
+            type="danger" 
+            size="large"
+            @click="openVideo"
+          >
+            ▶️ 查看原视频
+          </el-button>
+          <el-button size="large" @click="detailDialogVisible = false">关闭</el-button>
+          <el-button size="large" type="primary" @click="rewriteFromDetail">
+            仿写此文案
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { useCopywritingStore } from '@/stores/copywriting'
 import { useCategoryStore } from '@/stores/category'
 import { useUserStore } from '@/stores/user'
+import dayjs from 'dayjs'
 
 const router = useRouter()
 const copywritingStore = useCopywritingStore()
@@ -179,6 +274,10 @@ const searchKeyword = ref('')
 const filterIndustry = ref('')
 const sortBy = ref('created')
 const filterType = ref('')
+
+// 详情对话框
+const detailDialogVisible = ref(false)
+const currentDetail = ref<any>(null)
 
 // 从store获取真实数据
 const filteredCopywritings = computed(() => {
@@ -316,11 +415,42 @@ const refreshData = async () => {
 }
 
 const viewDetail = (id: string) => {
-  // TODO: 跳转到详情页
+  // 从store中找到对应的文案
+  const item = copywritingStore.copywritings.find(c => c.id === id)
+  if (item) {
+    currentDetail.value = item
+    detailDialogVisible.value = true
+  }
+}
+
+const rewriteFromDetail = () => {
+  if (currentDetail.value) {
+    detailDialogVisible.value = false
+    router.push({ path: '/rewrite', query: { refId: currentDetail.value.id } })
+  }
 }
 
 const rewriteItem = (id: string) => {
   router.push({ path: '/rewrite', query: { refId: id } })
+}
+
+const formatDate = (date: string) => {
+  return dayjs(date).format('YYYY-MM-DD HH:mm')
+}
+
+const getSourceBadgeType = (sourceType: string) => {
+  const types: Record<string, any> = {
+    original: 'success',
+    rewrite: 'primary',
+    revision: 'warning'
+  }
+  return types[sourceType] || 'info'
+}
+
+const openVideo = () => {
+  if (currentDetail.value?.videoUrl) {
+    window.open(currentDetail.value.videoUrl, '_blank')
+  }
 }
 </script>
 
@@ -555,6 +685,130 @@ const rewriteItem = (id: string) => {
   .copywriting-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* 详情对话框样式 - 简洁版 */
+.detail-dialog :deep(.el-dialog__header) {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.detail-dialog :deep(.el-dialog__title) {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.detail-content {
+  padding: 0;
+}
+
+/* 标题区域 */
+.title-section {
+  margin-bottom: 1.5rem;
+}
+
+.content-section {
+  margin-bottom: 1.5rem;
+}
+
+.section-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 0.75rem;
+}
+
+.title-text {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #333;
+  line-height: 1.6;
+}
+
+/* 分隔线 */
+.divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 1.5rem 0;
+}
+
+/* 文案内容区 */
+.copywriting-content {
+  font-size: 1rem;
+  line-height: 1.8;
+  color: #333;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  padding: 1.5rem;
+  background: #fafafa;
+  border-radius: 0.5rem;
+  min-height: 150px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* 拆解分析区域 - 简洁版 */
+.analysis-section {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+  background: #fafafa;
+  border-radius: 0.5rem;
+}
+
+.section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 1rem;
+}
+
+.analysis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.analysis-row {
+  display: flex;
+  line-height: 1.6;
+}
+
+.row-label {
+  font-size: 0.875rem;
+  color: #666;
+  font-weight: 500;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.row-value {
+  font-size: 0.875rem;
+  color: #333;
+  flex: 1;
+  word-wrap: break-word;
+}
+
+/* 底部信息栏 */
+.detail-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #f9f9f9;
+  border-radius: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.info-text {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+/* 底部操作按钮 */
+.dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 </style>
 

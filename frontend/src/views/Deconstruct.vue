@@ -43,7 +43,7 @@
           <el-input
             v-model="originalText"
             type="textarea"
-            :rows="12"
+            :autosize="{ minRows: 12, maxRows: 30 }"
             placeholder="请输入需要拆解的文案内容..."
           />
           <div class="char-count">字数：{{ originalText.length }}</div>
@@ -68,22 +68,42 @@
         <div v-else class="analysis-form">
           <div class="input-group">
             <label class="input-label">📌 话题</label>
-            <el-input v-model="analysis.topic" placeholder="文案的核心主题" />
+            <el-input 
+              v-model="analysis.topic" 
+              type="textarea"
+              :autosize="{ minRows: 1, maxRows: 5 }"
+              placeholder="文案的核心主题" 
+            />
           </div>
 
           <div class="input-group">
             <label class="input-label">🎣 钩子</label>
-            <el-input v-model="analysis.hook" placeholder="吸引用户注意力的开场/要素" />
+            <el-input 
+              v-model="analysis.hook" 
+              type="textarea"
+              :autosize="{ minRows: 1, maxRows: 5 }"
+              placeholder="吸引用户注意力的开场/要素" 
+            />
           </div>
 
           <div class="input-group">
             <label class="input-label">💎 金句</label>
-            <el-input v-model="analysis.goldenSentence" placeholder="文案中的亮点语句" />
+            <el-input 
+              v-model="analysis.goldenSentence" 
+              type="textarea"
+              :autosize="{ minRows: 1, maxRows: 5 }"
+              placeholder="文案中的亮点语句" 
+            />
           </div>
 
           <div class="input-group">
             <label class="input-label">📢 广告植入</label>
-            <el-input v-model="analysis.adPlacement" placeholder="商业内容的植入方式" />
+            <el-input 
+              v-model="analysis.adPlacement" 
+              type="textarea"
+              :autosize="{ minRows: 1, maxRows: 5 }"
+              placeholder="商业内容的植入方式" 
+            />
           </div>
 
           <div class="input-group">
@@ -91,14 +111,19 @@
             <el-input
               v-model="analysis.content"
               type="textarea"
-              :rows="3"
+              :autosize="{ minRows: 3, maxRows: 20 }"
               placeholder="主体内容描述"
             />
           </div>
 
           <div class="input-group">
             <label class="input-label">🏷️ 标签</label>
-            <el-input v-model="tagsStr" placeholder="关键词标签，用逗号分隔" />
+            <el-input 
+              v-model="tagsStr" 
+              type="textarea"
+              :autosize="{ minRows: 1, maxRows: 4 }"
+              placeholder="关键词标签，用逗号分隔" 
+            />
           </div>
 
           <el-button type="primary" size="large" class="save-btn" @click="saveAnalysis">
@@ -191,12 +216,12 @@ const aiStore = useAIStore()
 
 const analyzeText = async () => {
   if (!originalText.value.trim()) {
-    ElMessage.warning('请输入文案内容')
+    ElMessage.warning({ message: '请输入文案内容', duration: 2000 })
     return
   }
 
   if (!selectedIndustry.value) {
-    ElMessage.warning('请先选择行业分类')
+    ElMessage.warning({ message: '请先选择行业分类', duration: 2000 })
     return
   }
 
@@ -272,7 +297,7 @@ const clearAll = () => {
 
 const saveAnalysis = async () => {
   if (!analysis.value) {
-    ElMessage.warning('请先进行AI拆解')
+    ElMessage.warning({ message: '请先进行AI拆解', duration: 2000 })
     return
   }
 
@@ -291,7 +316,7 @@ const saveAnalysis = async () => {
     ElMessage.success({ message: '拆解结果已保存到数据库', duration: 1500 })
     clearAll()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '保存失败，请重试')
+    ElMessage.error({ message: error.response?.data?.message || '保存失败，请重试', duration: 2000 })
   }
 }
 </script>

@@ -29,12 +29,15 @@ export class AuthService {
     failReason?: string
   ) {
     try {
+      // 截断userAgent，防止手机浏览器的userAgent过长
+      const truncatedUserAgent = userAgent ? userAgent.substring(0, 180) : null;
+
       await this.prisma.loginLog.create({
         data: {
           userId,
           username,
           ipAddress,
-          userAgent,
+          userAgent: truncatedUserAgent,
           success,
           failReason,
         },
@@ -117,12 +120,15 @@ export class AuthService {
     // 计算token过期时间（从JWT中提取或使用默认7天）
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7天
 
+    // 截断userAgent，防止手机浏览器的userAgent过长导致数据库错误
+    const truncatedUserAgent = userAgent ? userAgent.substring(0, 180) : null;
+
     await this.prisma.userSession.create({
       data: {
         userId,
         token: this.hashToken(token),
         ipAddress,
-        userAgent,
+        userAgent: truncatedUserAgent,
         expiresAt,
       },
     });

@@ -30,7 +30,7 @@
             <el-input
               v-model="newContent"
               type="textarea"
-              :rows="4"
+              :autosize="{ minRows: 4, maxRows: 15 }"
               placeholder="输入你想要表达的新内容或卖点..."
             />
           </div>
@@ -154,7 +154,7 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
-import { rewriteCopywriting, getCopywritings } from '@/api/copywriting'
+import { rewriteCopywriting, saveRewriteResult, getCopywritings } from '@/api/copywriting'
 import { useCopywritingStore } from '@/stores/copywriting'
 import dayjs from 'dayjs'
 
@@ -165,6 +165,7 @@ const newContent = ref('')
 const rewriteType = ref('structure')
 const generating = ref(false)
 const rewriteResult = ref('')
+const rewriteData = ref<any>(null) // 保存完整的生成结果，用于保存时使用
 
 // 搜索相关
 const searchDialogVisible = ref(false)
@@ -198,7 +199,7 @@ const loadAllCopywritings = async () => {
       allCopywritings.value = result
     }
   } catch (error) {
-    ElMessage.error('加载文案库失败')
+    ElMessage.error({ message: '加载文案库失败', duration: 2000 })
   } finally {
     searching.value = false
   }
@@ -234,30 +235,35 @@ const formatDate = (date: string) => {
 
 const generateRewrite = async () => {
   if (!selectedReference.value) {
-    ElMessage.warning('请先输入参考文案')
+    ElMessage.warning({ message: '请先输入参考文案', duration: 2000 })
     return
   }
 
   if (!newContent.value.trim()) {
-    ElMessage.warning('请输入新的核心内容/卖点')
+    ElMessage.warning({ message: '请输入新的核心内容/卖点', duration: 2000 })
     return
   }
 
   generating.value = true
 
   try {
-    // 调用后端API生成仿写文案（后端会自动从数据库获取激活的AI配置）
+    // 调用后端API生成仿写文案（只生成，不保存）
     const result = await rewriteCopywriting({
       referenceContent: selectedReference.value,
       newContent: newContent.value,
       rewriteType: rewriteType.value as 'structure' | 'style' | 'hook' | 'mixed'
     })
 
-    if (result && result.rewriteResult) {
-      rewriteResult.value = result.rewriteResult.content || result.copywriting.content
-      
-      // 标记文案数据需要刷新，确保切换页面时能看到新数据
-      copywritingStore.markAsStale()
+    if (result && result.content) {
+      rewriteResult.value = result.content
+      // 保存完整结果，供保存时使用
+      rewriteData.value = {
+        title: result.title || '',
+        content: result.content,
+        highlights: result.highlights || [],
+        referenceContent: selectedReference.value,
+        rewriteType: rewriteType.value
+      }
       
       ElMessage.success({ message: '仿写文案生成成功！', duration: 1500 })
     } else {
@@ -299,18 +305,31 @@ const generateRewrite = async () => {
   }
 }
 
-const saveRewrite = () => {
-  if (!rewriteResult.value) {
-    ElMessage.warning('请先生成仿写文案')
+const saveRewrite = async () => {
+  if (!rewriteResult.value || !rewriteData.value) {
+    ElMessage.warning({ message: '请先生成仿写文案', duration: 2000 })
     return
   }
 
-  // 仿写结果已经在生成时自动保存到数据库
-  ElMessage.success({ message: '仿写文案已保存到文案库', duration: 1500 })
+  try {
+    // 调用保存API
+    await saveRewriteResult(rewriteData.value)
+    
+    // 标记文案数据需要刷新
+    copywritingStore.markAsStale()
+    
+    ElMessage.success({ message: '仿写文案已保存到文案库', duration: 1500 })
 
-  // 清空表单
-  newContent.value = ''
-  rewriteResult.value = ''
+    // 清空表单
+    newContent.value = ''
+    rewriteResult.value = ''
+    rewriteData.value = null
+  } catch (error: any) {
+    ElMessage.error({ 
+      message: error.response?.data?.message || '保存失败', 
+      duration: 2000 
+    })
+  }
 }
 </script>
 

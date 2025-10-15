@@ -145,7 +145,7 @@
             <el-input
               v-model="userPrompts.system"
               type="textarea"
-                  :rows="3"
+                  :autosize="{ minRows: 3, maxRows: 10 }"
                   placeholder="例如：你是短视频文案分析与创作专家，擅长从用户视角分析内容..."
                   class="prompt-input"
             />
@@ -172,7 +172,7 @@
             <el-input
               v-model="userPrompts.deconstructDesc"
               type="textarea"
-                  :rows="4"
+                  :autosize="{ minRows: 4, maxRows: 15 }"
                   placeholder="例如：请帮我分析这段文案的核心话题、开头钩子、金句亮点、广告植入方式等关键要素。"
                   class="prompt-input"
                 />
@@ -211,7 +211,7 @@
             <el-input
               v-model="userPrompts.analyzeDesc"
               type="textarea"
-                  :rows="4"
+                  :autosize="{ minRows: 4, maxRows: 15 }"
                   placeholder="例如：请分析这个文案为什么可能成为爆款，包括它的优点、吸引人的地方，以及给出改进建议。"
                   class="prompt-input"
                 />
@@ -250,7 +250,7 @@
             <el-input
                   v-model="userPrompts.rewriteStructure"
               type="textarea"
-                  :rows="4"
+                  :autosize="{ minRows: 4, maxRows: 15 }"
                   placeholder="例如：请严格保持参考文案的段落结构、句式长度和节奏，只替换核心内容和细节描述。"
                   class="prompt-input"
                 />
@@ -293,7 +293,7 @@
                 <el-input
                   v-model="userPrompts.rewriteStyle"
                   type="textarea"
-                  :rows="4"
+                  :autosize="{ minRows: 4, maxRows: 15 }"
                   placeholder="例如：请学习参考文案的语气、用词风格、表达方式和情绪基调，用新内容创作一个风格相同的文案。"
                   class="prompt-input"
                 />
@@ -336,7 +336,7 @@
                 <el-input
                   v-model="userPrompts.rewriteHook"
                   type="textarea"
-                  :rows="4"
+                  :autosize="{ minRows: 4, maxRows: 15 }"
                   placeholder="例如：请重点学习参考文案的开头钩子设计和吸引用户的方式，用新内容创作一个同样吸引人的文案。"
                   class="prompt-input"
                 />
@@ -379,7 +379,7 @@
                 <el-input
                   v-model="userPrompts.rewriteMixed"
                   type="textarea"
-                  :rows="4"
+                  :autosize="{ minRows: 4, maxRows: 15 }"
                   placeholder="例如：请综合考虑参考文案的结构、风格和钩子，灵活组合创作，在保持核心吸引力的同时融入新内容。"
                   class="prompt-input"
                 />
@@ -422,7 +422,7 @@
                 <el-input
                   v-model="userPrompts.optimize"
                   type="textarea"
-                  :rows="5"
+                  :autosize="{ minRows: 5, maxRows: 15 }"
                   placeholder="例如：请对以下文案进行优化，提升其吸引力、可读性和传播潜力。优化时请关注：1. 开头钩子是否足够吸引人 2. 语言表达是否简洁有力 3. 情感共鸣是否强烈 4. 行动号召是否明确"
                   class="prompt-input"
                 />
@@ -937,7 +937,7 @@
           <el-input
             v-model="editForm.content"
             type="textarea"
-            :rows="8"
+            :autosize="{ minRows: 8, maxRows: 25 }"
             placeholder="请输入文案内容..."
           />
         </el-form-item>
@@ -1035,7 +1035,7 @@ onMounted(async () => {
       }
     }
   } catch (error: any) {
-    ElMessage.error('加载设置失败，请刷新页面重试')
+    ElMessage.error({ message: '加载设置失败，请刷新页面重试', duration: 2000 })
   }
 })
 
@@ -1142,7 +1142,7 @@ const fetchModels = async () => {
   }
 
   if (lastErr) {
-    ElMessage.error(`刷新失败：${lastErr?.message || lastErr}`)
+    ElMessage.error({ message: `刷新失败：${lastErr?.message || lastErr}`, duration: 2000 })
     return
   }
 
@@ -1159,7 +1159,7 @@ const fetchModels = async () => {
   }
 
   if (items.length === 0) {
-    ElMessage.warning('网关未返回模型列表或格式不兼容')
+    ElMessage.warning({ message: '网关未返回模型列表或格式不兼容', duration: 2000 })
     return
   }
 
@@ -1539,7 +1539,7 @@ const loadUsers = async () => {
     const response = await api.get('/auth/users')
     allUsers.value = response.data || response
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '加载用户列表失败')
+    ElMessage.error({ message: error.response?.data?.message || '加载用户列表失败', duration: 2000 })
   } finally {
     usersLoading.value = false
   }
@@ -1562,7 +1562,7 @@ const updateUserStatus = async (userId: string, status: string) => {
     await loadUsers()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '操作失败')
+      ElMessage.error({ message: error.response?.data?.message || '操作失败', duration: 2000 })
     }
   }
 }
@@ -1576,7 +1576,7 @@ const loadMaterials = async () => {
     const response = await api.get('/copywriting/admin/materials')
     allMaterials.value = response.data || response
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '加载素材列表失败')
+    ElMessage.error({ message: error.response?.data?.message || '加载素材列表失败', duration: 2000 })
   } finally {
     materialsLoading.value = false
   }
@@ -1613,7 +1613,7 @@ const reviewShare = async (id: string, action: 'approve' | 'reject') => {
     await loadMaterials()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '操作失败')
+      ElMessage.error({ message: error.response?.data?.message || '操作失败', duration: 2000 })
     }
   }
 }
@@ -1621,7 +1621,7 @@ const reviewShare = async (id: string, action: 'approve' | 'reject') => {
 // 批量审核
 const batchReview = async (action: 'approve' | 'reject') => {
   if (selectedMaterials.value.length === 0) {
-    ElMessage.warning('请先选择要操作的素材')
+    ElMessage.warning({ message: '请先选择要操作的素材', duration: 2000 })
     return
   }
 
@@ -1649,7 +1649,7 @@ const batchReview = async (action: 'approve' | 'reject') => {
     await loadMaterials()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '批量操作失败')
+      ElMessage.error({ message: error.response?.data?.message || '批量操作失败', duration: 2000 })
     }
   }
 }
@@ -1672,7 +1672,7 @@ const deleteMaterial = async (id: string) => {
     await loadMaterials()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '删除失败')
+      ElMessage.error({ message: error.response?.data?.message || '删除失败', duration: 2000 })
     }
   }
 }
@@ -1680,7 +1680,7 @@ const deleteMaterial = async (id: string) => {
 // 批量删除
 const batchDelete = async () => {
   if (selectedMaterials.value.length === 0) {
-    ElMessage.warning('请先选择要删除的素材')
+    ElMessage.warning({ message: '请先选择要删除的素材', duration: 2000 })
     return
   }
 
@@ -1706,7 +1706,7 @@ const batchDelete = async () => {
     await loadMaterials()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '批量删除失败')
+      ElMessage.error({ message: error.response?.data?.message || '批量删除失败', duration: 2000 })
     }
   }
 }
@@ -1725,7 +1725,7 @@ const editMaterial = (item: any) => {
 // 保存编辑
 const handleSaveMaterial = async () => {
   if (!editForm.value.title || !editForm.value.content || !editForm.value.industry) {
-    ElMessage.warning('请填写完整信息')
+    ElMessage.warning({ message: '请填写完整信息', duration: 2000 })
     return
   }
 
@@ -1741,7 +1741,7 @@ const handleSaveMaterial = async () => {
     editDialogVisible.value = false
     await loadMaterials()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '保存失败')
+    ElMessage.error({ message: error.response?.data?.message || '保存失败', duration: 2000 })
   } finally {
     saving.value = false
   }
@@ -1762,7 +1762,7 @@ const loadUserStats = async () => {
     const response = await api.get('/settings/user-stats')
     userStats.value = response.data || response
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '加载用户数据统计失败')
+    ElMessage.error({ message: error.response?.data?.message || '加载用户数据统计失败', duration: 2000 })
   } finally {
     userStatsLoading.value = false
   }
@@ -1797,7 +1797,7 @@ watch(materialFilter, (newFilter) => {
 const saveAiConfig = async () => {
   // 验证必填项
   if (!aiConfig.value.apiKey) {
-    ElMessage.error('请输入 API Key')
+    ElMessage.error({ message: '请输入 API Key', duration: 2000 })
     return
   }
 
@@ -1818,7 +1818,7 @@ const saveAiConfig = async () => {
 
     ElMessage.success({ message: 'AI 配置已保存', duration: 1500 })
   } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || '保存配置失败')
+    ElMessage.error({ message: error?.response?.data?.message || '保存配置失败', duration: 2000 })
   }
 }
 
@@ -1945,7 +1945,7 @@ const testSingleConfigConservatively = async (provider: string, baseUrl: string,
 // 一键测试所有已保存的配置
 const testAllConfigs = async () => {
   if (aiStore.savedConfigs.length === 0) {
-    ElMessage.info('暂无已保存配置可测试')
+    ElMessage.info({ message: '暂无已保存配置可测试', duration: 2000 })
     return
   }
 
@@ -1960,7 +1960,7 @@ const testAllConfigs = async () => {
     return
   }
 
-  ElMessage.info(`开始测试 ${configsToTest.length} 个未连接的配置...`)
+  ElMessage.info({ message: `开始测试 ${configsToTest.length} 个未连接的配置...`, duration: 1500 })
   
   let success = 0
   let skipped = 0
@@ -2019,9 +2019,9 @@ const testAllConfigs = async () => {
   if (success > 0) {
     ElMessage.success({ message: `测试完成！新增 ${success} 个连接，当前共有 ${totalConnected} 个可用配置`, duration: 2000 })
   } else if (skipped === total) {
-    ElMessage.warning('所有配置都被跳过，请检查配置是否完整')
+    ElMessage.warning({ message: '所有配置都被跳过，请检查配置是否完整', duration: 2000 })
   } else {
-    ElMessage.warning(`测试完成，但没有新的成功连接。失败 ${failed} 个，跳过 ${skipped} 个`)
+    ElMessage.warning({ message: `测试完成，但没有新的成功连接。失败 ${failed} 个，跳过 ${skipped} 个`, duration: 2000 })
   }
 }
 
@@ -2110,7 +2110,7 @@ const deleteModel = async (id: string) => {
     ElMessage.success({ message: '已删除配置', duration: 1500 })
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error?.response?.data?.message || '删除配置失败')
+      ElMessage.error({ message: error?.response?.data?.message || '删除配置失败', duration: 2000 })
     }
   }
 }
@@ -2120,7 +2120,7 @@ const savePrompts = async () => {
   if (!userPrompts.value.deconstructDesc || !userPrompts.value.analyzeDesc || 
       !userPrompts.value.rewriteStructure || !userPrompts.value.rewriteStyle ||
       !userPrompts.value.rewriteHook || !userPrompts.value.rewriteMixed || !userPrompts.value.optimize) {
-    ElMessage.warning('请填写所有必填的提示词描述')
+    ElMessage.warning({ message: '请填写所有必填的提示词描述', duration: 2000 })
     return
   }
   
@@ -2140,7 +2140,7 @@ const savePrompts = async () => {
     await apiSavePrompts(payload)
     ElMessage.success({ message: '提示词已保存', duration: 1500 })
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '保存提示词失败')
+    ElMessage.error({ message: e?.response?.data?.message || '保存提示词失败', duration: 2000 })
   }
 }
 
@@ -2171,7 +2171,7 @@ const loadCategories = async () => {
       categories.value = []
     }
   } catch (error: any) {
-    ElMessage.error(error.errorMessage || error.message || '加载分类失败')
+    ElMessage.error({ message: error.errorMessage || error.message || '加载分类失败', duration: 2000 })
     categories.value = []
   } finally {
     categoriesLoading.value = false
@@ -2205,7 +2205,7 @@ const showEditCategoryDialog = (category: Category) => {
 // 保存分类
 const handleSaveCategory = async () => {
   if (!categoryForm.value.name || !categoryForm.value.value) {
-    ElMessage.warning('请填写分类名称和分类值')
+    ElMessage.warning({ message: '请填写分类名称和分类值', duration: 2000 })
     return
   }
 
@@ -2228,7 +2228,7 @@ const handleSaveCategory = async () => {
     categoryDialogVisible.value = false
     loadCategories()
   } catch (error: any) {
-    ElMessage.error(error.errorMessage || '保存分类失败')
+    ElMessage.error({ message: error.errorMessage || '保存分类失败', duration: 2000 })
   }
 }
 
@@ -2250,7 +2250,7 @@ const handleDeleteCategory = async (category: Category) => {
     loadCategories()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.errorMessage || '删除分类失败')
+      ElMessage.error({ message: error.errorMessage || '删除分类失败', duration: 2000 })
     }
   }
 }
@@ -2262,12 +2262,12 @@ const exportData = () => {
 
 const importData = () => {
   // TODO: 导入数据
-  ElMessage.info('请选择要导入的数据文件')
+  ElMessage.info({ message: '请选择要导入的数据文件', duration: 2000 })
 }
 
 const clearData = () => {
   // TODO: 清空数据
-  ElMessage.warning('此功能需要确认')
+  ElMessage.warning({ message: '此功能需要确认', duration: 2000 })
 }
 </script>
 

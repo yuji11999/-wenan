@@ -351,7 +351,7 @@ const fetchUsers = async () => {
     const response = await api.get('/auth/users')
     users.value = response
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '获取用户列表失败')
+    ElMessage.error({ message: error.response?.data?.message || '获取用户列表失败', duration: 2000 })
   } finally {
     loading.value = false
   }
@@ -380,7 +380,7 @@ const updateStatus = async (userId: string, status: string) => {
     fetchUsers()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '操作失败')
+      ElMessage.error({ message: error.response?.data?.message || '操作失败', duration: 2000 })
     }
   }
 }
@@ -401,11 +401,11 @@ const unlockUser = async (userId: string) => {
     )
 
     await api.put(`/auth/users/${userId}/unlock`)
-    ElMessage.success('用户账号已解锁')
+    ElMessage.success({ message: '用户账号已解锁', duration: 1500 })
     fetchUsers()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '解锁失败')
+      ElMessage.error({ message: error.response?.data?.message || '解锁失败', duration: 2000 })
     }
   }
 }
@@ -429,7 +429,7 @@ const loadUserSessions = async (userId: string) => {
     const response = await api.get(`/auth/users/${userId}/sessions`)
     userSessions.value = response
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '获取会话列表失败')
+    ElMessage.error({ message: error.response?.data?.message || '获取会话列表失败', duration: 2000 })
   } finally {
     sessionLoading.value = false
   }
@@ -457,7 +457,7 @@ const loadLoginLogs = async (username?: string) => {
     const response = await api.get('/auth/logs/login', { params })
     loginLogs.value = response
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.message || '获取登录日志失败')
+    ElMessage.error({ message: error.response?.data?.message || '获取登录日志失败', duration: 2000 })
   } finally {
     logLoading.value = false
   }
@@ -477,7 +477,7 @@ const forceLogoutUser = async (user: User) => {
     )
 
     await api.delete(`/auth/users/${user.id}/sessions`)
-    ElMessage.success('用户已强制登出')
+    ElMessage.success({ message: '用户已强制登出', duration: 1500 })
     
     // 如果会话对话框打开，刷新会话列表
     if (sessionDialogVisible.value && currentUser.value?.id === user.id) {
@@ -485,7 +485,7 @@ const forceLogoutUser = async (user: User) => {
     }
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '强制登出失败')
+      ElMessage.error({ message: error.response?.data?.message || '强制登出失败', duration: 2000 })
     }
   }
 }
@@ -504,7 +504,7 @@ const forceLogoutSession = async (sessionId: string) => {
     )
 
     await api.delete(`/auth/sessions/${sessionId}`)
-    ElMessage.success('会话已踢出')
+    ElMessage.success({ message: '会话已踢出', duration: 1500 })
     
     // 刷新会话列表
     if (currentUser.value) {
@@ -512,7 +512,7 @@ const forceLogoutSession = async (sessionId: string) => {
     }
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.message || '踢出会话失败')
+      ElMessage.error({ message: error.response?.data?.message || '踢出会话失败', duration: 2000 })
     }
   }
 }

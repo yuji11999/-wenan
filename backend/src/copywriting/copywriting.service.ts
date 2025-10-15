@@ -111,30 +111,15 @@ export class CopywritingService {
     return result;
   }
 
-  // 创建原创文案
+  // 创建原创文案（只保存，不做AI分析）
   async create(userId: string, createDto: CreateCopywritingDto, headers?: any) {
     const { title, content, reference, industry, sourceType, isPublic, isSystemMaterial } = createDto;
-
-    const aiOpts = {
-      apiKey: headers?.['x-ai-key'] || headers?.['X-AI-Key'],
-      baseUrl: headers?.['x-ai-base-url'] || headers?.['X-AI-Base-Url'],
-      model: headers?.['x-ai-model'] || headers?.['X-AI-Model'],
-    };
-
-    // 如果有参考文案，可以进行分析
-    let referenceAnalysis = null;
-    if (reference) {
-      referenceAnalysis = await this.aiService.analyzeCopywriting(reference, aiOpts);
-    }
-
-    // 分析创作文案
-    const contentAnalysis = await this.aiService.analyzeCopywriting(content, aiOpts);
 
     // 保存文案
     const copywriting = await this.prisma.copywriting.create({
       data: {
         userId,
-        title,
+        title: title || content.substring(0, 50),
         content,
         industry: industry || 'other',
         sourceType: sourceType || 'original',
@@ -146,12 +131,11 @@ export class CopywritingService {
 
     return {
       copywriting,
-      referenceAnalysis,
-      contentAnalysis,
+      message: '文案已保存',
     };
   }
 
-  // 文案仿写
+  // 文案仿写（只生成，不保存）
   async rewrite(userId: string, rewriteDto: RewriteDto, headers?: any) {
     const {
       referenceId,
@@ -166,19 +150,30 @@ export class CopywritingService {
       model: headers?.['x-ai-model'] || headers?.['X-AI-Model'],
     };
 
-    // 调用AI生成仿写
+    // 调用AI生成仿写，只返回结果，不保存
     const rewriteResult = await this.aiService.rewriteCopywriting({
       reference: referenceContent || '',
       newContent,
       type: rewriteType,
     }, aiOpts);
 
+    return {
+      ...rewriteResult,
+      referenceId,
+      referenceContent,
+    };
+  }
+
+  // 保存仿写结果到数据库
+  async saveRewrite(userId: string, data: any) {
+    const { title, content, referenceId, referenceContent, rewriteType } = data;
+
     // 创建文案记录
     const copywriting = await this.prisma.copywriting.create({
       data: {
         userId,
-        title: rewriteResult.title || newContent.substring(0, 50),
-        content: rewriteResult.content,
+        title: title || content.substring(0, 50),
+        content,
         industry: 'other',
         sourceType: 'rewrite',
         sourceId: referenceId,
@@ -212,7 +207,7 @@ export class CopywritingService {
 
     return {
       copywriting,
-      rewriteResult,
+      message: '仿写文案已保存',
     };
   }
 

@@ -65,9 +65,14 @@ export const createCopywriting = (data: CreateRequest) => {
   return api.post('/copywriting/create', data, { headers: getActiveAIHeaders() })
 }
 
-// 仿写文案
+// 仿写文案（只生成，不保存）
 export const rewriteCopywriting = (data: RewriteRequest) => {
   return api.post('/copywriting/rewrite', data, { headers: getActiveAIHeaders() })
+}
+
+// 保存仿写结果到数据库
+export const saveRewriteResult = (data: any) => {
+  return api.post('/copywriting/save-rewrite', data)
 }
 
 // 获取文案列表

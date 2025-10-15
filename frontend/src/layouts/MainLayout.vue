@@ -146,13 +146,13 @@ const handleCommand = async (command: string) => {
       aiStore.resetStore()
       userStore.logout()
       
-      ElMessage.success('已退出登录')
+      ElMessage.success({ message: '已退出登录', duration: 1500 })
       router.push('/login')
     } catch {
       // 用户取消
     }
   } else if (command === 'profile') {
-    ElMessage.info('个人信息功能开发中')
+    ElMessage.info({ message: '个人信息功能开发中', duration: 2000 })
   }
 }
 </script>
