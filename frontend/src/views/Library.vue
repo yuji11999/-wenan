@@ -76,6 +76,16 @@
             （总共 {{ copywritingStore.copywritings.length }} 个）
           </template>
         </span>
+        <!-- 批量操作按钮 -->
+        <div v-if="selectedItems.length > 0" class="batch-actions">
+          <span class="selected-count">已选择 {{ selectedItems.length }} 个</span>
+          <el-button size="small" type="danger" @click="batchDelete">
+            批量删除
+          </el-button>
+          <el-button size="small" @click="clearSelection">
+            取消选择
+          </el-button>
+        </div>
       </div>
       <div class="active-filters" v-if="filterIndustry || sortBy !== 'created' || filterType">
         <span class="filter-label">当前筛选：</span>
@@ -118,7 +128,17 @@
         v-for="item in filteredCopywritings"
         :key="item.id"
         class="copywriting-card"
+        :class="{ 'is-selected': isSelected(item.id) }"
       >
+        <!-- 多选复选框 - 只有自己的素材才能选择 -->
+        <el-checkbox 
+          v-if="canDelete(item)"
+          :model-value="isSelected(item.id)"
+          @change="toggleSelect(item.id)"
+          class="card-checkbox"
+          @click.stop
+        />
+
         <div class="card-header">
           <h3>{{ item.title }}</h3>
           <span class="source-badge" :class="item.sourceType">
@@ -146,6 +166,15 @@
             <el-button size="small" @click="viewDetail(item.id)">查看</el-button>
             <el-button size="small" type="primary" @click="rewriteItem(item.id)">
               仿写
+            </el-button>
+            <!-- 删除按钮 - 只有自己的素材才能删除 -->
+            <el-button 
+              v-if="canDelete(item)" 
+              size="small" 
+              type="danger" 
+              @click.stop="deleteItem(item.id)"
+            >
+              删除
             </el-button>
           </div>
         </div>
@@ -250,10 +279,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useCopywritingStore } from '@/stores/copywriting'
 import { useCategoryStore } from '@/stores/category'
 import { useUserStore } from '@/stores/user'
+import api from '@/api'
 import dayjs from 'dayjs'
 
 const router = useRouter()
@@ -278,6 +308,9 @@ const filterType = ref('')
 // 详情对话框
 const detailDialogVisible = ref(false)
 const currentDetail = ref<any>(null)
+
+// 多选批量删除
+const selectedItems = ref<string[]>([])
 
 // 从store获取真实数据
 const filteredCopywritings = computed(() => {
@@ -452,6 +485,103 @@ const openVideo = () => {
     window.open(currentDetail.value.videoUrl, '_blank')
   }
 }
+
+// 判断是否可以删除（只能删除自己的素材，不能删除系统素材和共享素材）
+const canDelete = (item: any) => {
+  // 系统素材不能删除
+  if (item.isSystemMaterial) return false
+  // 只能删除自己的文案
+  return isCurrentUser(item)
+}
+
+// 删除素材
+const deleteItem = async (id: string) => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除这个文案吗？删除后无法恢复。',
+      '确认删除',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    await api.delete(`/copywriting/${id}`)
+    ElMessage.success({ message: '删除成功', duration: 1500 })
+    
+    // 刷新列表
+    await copywritingStore.refreshCopywritings()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error({ 
+        message: error.response?.data?.message || '删除失败', 
+        duration: 2000 
+      })
+    }
+  }
+}
+
+// 多选相关函数
+const isSelected = (id: string) => {
+  return selectedItems.value.includes(id)
+}
+
+const toggleSelect = (id: string) => {
+  const index = selectedItems.value.indexOf(id)
+  if (index > -1) {
+    selectedItems.value.splice(index, 1)
+  } else {
+    selectedItems.value.push(id)
+  }
+}
+
+const clearSelection = () => {
+  selectedItems.value = []
+}
+
+// 批量删除
+const batchDelete = async () => {
+  if (selectedItems.value.length === 0) {
+    ElMessage.warning({ message: '请先选择要删除的文案', duration: 2000 })
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedItems.value.length} 个文案吗？删除后无法恢复。`,
+      '确认批量删除',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    // 逐个删除
+    const deletePromises = selectedItems.value.map(id => 
+      api.delete(`/copywriting/${id}`)
+    )
+    
+    await Promise.all(deletePromises)
+    
+    ElMessage.success({ 
+      message: `成功删除 ${selectedItems.value.length} 个文案`, 
+      duration: 1500 
+    })
+    
+    // 清空选择并刷新列表
+    selectedItems.value = []
+    await copywritingStore.refreshCopywritings()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error({ 
+        message: error.response?.data?.message || '批量删除失败', 
+        duration: 2000 
+      })
+    }
+  }
+}
 </script>
 
 <style scoped>
@@ -490,6 +620,27 @@ const openVideo = () => {
   border: 1px solid rgba(59, 130, 246, 0.1);
 }
 
+.status-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: 1rem;
+  padding-left: 1rem;
+  border-left: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.selected-count {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #f59e0b;
+}
+
 .result-count {
   font-size: 0.875rem;
   color: var(--text-secondary);
@@ -520,11 +671,25 @@ const openVideo = () => {
   padding: 1.5rem;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   transition: all 0.2s;
+  position: relative;
+  border: 2px solid transparent;
 }
 
 .copywriting-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.copywriting-card.is-selected {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.02);
+}
+
+.card-checkbox {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 1;
 }
 
 .card-header {
@@ -666,10 +831,22 @@ const openVideo = () => {
   .toolbar {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.75rem;
   }
 
+  /* 手机端筛选按钮横向排列 */
   .filter-group {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+
+  .filter-group .el-select {
+    width: 100% !important;
+  }
+
+  .filter-group .el-button {
+    grid-column: 1 / -1;
   }
 
   .filter-status {
@@ -684,6 +861,16 @@ const openVideo = () => {
 
   .copywriting-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* 批量操作栏手机端优化 */
+  .batch-actions {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(59, 130, 246, 0.2);
+    width: 100%;
   }
 }
 

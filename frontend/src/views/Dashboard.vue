@@ -67,7 +67,7 @@
           </div>
           <p class="text-secondary">{{ item.content.substring(0, 100) }}...</p>
           <div class="meta">
-            <span class="tag">{{ item.industry }}</span>
+            <span class="tag">{{ categoryStore.getCategoryName(item.industry) }}</span>
             <span class="time">{{ formatDate(item.createdAt) }}</span>
           </div>
         </div>
@@ -80,10 +80,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCopywritingStore } from '@/stores/copywriting'
+import { useCategoryStore } from '@/stores/category'
 import dayjs from 'dayjs'
 
 const router = useRouter()
 const copywritingStore = useCopywritingStore()
+const categoryStore = useCategoryStore()
 
 const quickActions = [
   {
@@ -172,7 +174,10 @@ const viewCopywriting = (id: string) => {
 
 // 页面加载时获取数据（使用缓存）
 onMounted(async () => {
-  await copywritingStore.loadCopywritings()
+  await Promise.all([
+    categoryStore.loadCategories(),
+    copywritingStore.loadCopywritings()
+  ])
 })
 </script>
 
@@ -255,12 +260,18 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.5rem;
+  gap: 1rem;
 }
 
 .list-item h4 {
   font-size: 1.125rem;
   font-weight: 600;
   margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hot-badge {
@@ -270,6 +281,8 @@ onMounted(async () => {
   border-radius: 1rem;
   font-size: 0.75rem;
   font-weight: 500;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .text-secondary {
