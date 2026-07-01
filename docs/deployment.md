@@ -102,6 +102,62 @@ git pull
 
 `.env` 文件不会被 Git 管理，更新代码不会覆盖已有数据库密码和系统密钥。
 
+## 预构建镜像部署
+
+如果服务器构建镜像太慢，可以在本地电脑或 CI 先构建并推送后端/前端镜像，服务器只拉取镜像运行。
+
+前提：你需要有一个 Docker 镜像仓库，例如 Docker Hub、阿里云容器镜像服务、腾讯云 TCR 或其他私有 registry。
+
+### 1. 本地或 CI 构建并推送镜像
+
+先登录镜像仓库：
+
+```bash
+docker login 镜像仓库地址
+```
+
+在项目根目录执行：
+
+```bash
+BACKEND_IMAGE=镜像仓库/命名空间/short-video-backend:latest \
+FRONTEND_IMAGE=镜像仓库/命名空间/short-video-frontend:latest \
+./build-and-push-images.sh
+```
+
+如果需要指定 npm 源：
+
+```bash
+NPM_REGISTRY=https://registry.npmmirror.com \
+BACKEND_IMAGE=镜像仓库/命名空间/short-video-backend:latest \
+FRONTEND_IMAGE=镜像仓库/命名空间/short-video-frontend:latest \
+./build-and-push-images.sh
+```
+
+### 2. 服务器拉取镜像部署
+
+服务器上更新代码：
+
+```bash
+cd short-video-script-studio
+git pull
+```
+
+编辑 `.env`，填写镜像地址：
+
+```env
+BACKEND_IMAGE=镜像仓库/命名空间/short-video-backend:latest
+FRONTEND_IMAGE=镜像仓库/命名空间/short-video-frontend:latest
+```
+
+然后执行：
+
+```bash
+chmod +x deploy-prebuilt.sh
+./deploy-prebuilt.sh
+```
+
+这种方式不会在服务器上执行前后端编译，只会 `docker pull` 镜像并启动服务。
+
 ## 常用命令
 
 查看容器状态：
