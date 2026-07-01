@@ -69,6 +69,29 @@ BACKEND_PORT=4000
 ./deploy.sh
 ```
 
+## 构建源配置
+
+Dockerfile 默认使用基础镜像自带的 Debian/Alpine 软件源，不再强制替换为某个云厂商镜像，避免服务器无法解析特定镜像域名导致构建卡住。
+
+如果 `npm ci` 下载依赖较慢，可以在 `.env` 中改成当前服务器可访问的 npm 源：
+
+```env
+NPM_REGISTRY=https://registry.npmjs.org/
+```
+
+例如网络环境更适合国内镜像时，可改为：
+
+```env
+NPM_REGISTRY=https://registry.npmmirror.com
+```
+
+修改后重新构建：
+
+```bash
+docker compose --env-file .env build --no-cache
+docker compose --env-file .env up -d
+```
+
 ## 更新部署
 
 ```bash

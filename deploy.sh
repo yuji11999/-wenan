@@ -49,6 +49,7 @@ MYSQL_PASSWORD=$(random_secret)
 BACKEND_PORT=4000
 BACKEND_BIND_HOST=127.0.0.1
 FRONTEND_PORT=4001
+NPM_REGISTRY=https://registry.npmjs.org/
 JWT_SECRET=$(random_secret)
 ENCRYPTION_KEY=$(random_secret)
 EOF

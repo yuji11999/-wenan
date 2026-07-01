@@ -29,6 +29,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
     container_name: duanshipin-backend
     restart: always
     init: true
@@ -61,6 +63,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
     container_name: duanshipin-frontend
     restart: always
     ports:

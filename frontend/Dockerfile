@@ -1,17 +1,16 @@
 # 前端 Dockerfile
 FROM node:18-alpine AS builder
 
-# 使用腾讯云镜像源加速
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.cloud.tencent.com/g' /etc/apk/repositories
-
 # 设置工作目录
 WORKDIR /app
 
 # 复制 package.json 和 package-lock.json
 COPY package*.json ./
 
-# 使用腾讯云 npm 镜像源
-RUN npm config set registry https://mirrors.cloud.tencent.com/npm/
+# 可按需覆盖 npm registry，例如：
+# docker compose build --build-arg NPM_REGISTRY=https://registry.npmmirror.com
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+RUN npm config set registry "$NPM_REGISTRY"
 
 # 安装依赖
 RUN npm ci --legacy-peer-deps --no-audit --progress=false
@@ -27,9 +26,6 @@ RUN npm run build
 
 # 生产环境 - 使用 Nginx
 FROM nginx:alpine
-
-# 使用腾讯云镜像源加速
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.cloud.tencent.com/g' /etc/apk/repositories
 
 # 复制自定义 nginx 配置
 COPY nginx.conf /etc/nginx/nginx.conf
