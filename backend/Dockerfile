@@ -28,7 +28,7 @@ RUN npx prisma generate
 
 # 第5层：复制源代码（代码变化不会导致重新安装依赖）
 COPY src ./src
-COPY tsconfig.json nest-cli.json ./
+COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 
 # 第6层：构建应用（只有代码变化时才重新构建）
 RUN npm run build
