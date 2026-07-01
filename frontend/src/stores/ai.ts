@@ -72,8 +72,8 @@ export const useAIStore = defineStore('ai', () => {
   // 每个厂商的模型列表（刷新列表后缓存到localStorage）
   const providerModels = ref<Record<string, AIModel[]>>({})
 
-  // 未保存前的临时草稿（按厂商），用于在切换模型或刷新列表时保留用户输入（不再用于自动回填敏感信息）
-  const providerDrafts = ref<Record<string, { apiKey?: string; baseUrl?: string }>>({})
+  // 未保存前的临时草稿（按厂商），只保留非敏感字段
+  const providerDrafts = ref<Record<string, { baseUrl?: string }>>({})
 
   // 从后端加载所有AI配置
   const loadConfigs = async () => {
@@ -106,7 +106,14 @@ export const useAIStore = defineStore('ai', () => {
     const drafts = localStorage.getItem('ai_provider_drafts')
     if (drafts) {
       try {
-        providerDrafts.value = JSON.parse(drafts)
+        const parsed = JSON.parse(drafts)
+        providerDrafts.value = Object.fromEntries(
+          Object.entries(parsed).map(([provider, draft]: [string, any]) => [
+            provider,
+            { baseUrl: draft?.baseUrl || '' },
+          ]),
+        )
+        saveToStorage()
       } catch (e) {
         // 解析失败
         providerDrafts.value = {}
@@ -192,7 +199,7 @@ export const useAIStore = defineStore('ai', () => {
   }
 
   // 写入/合并厂商草稿（不影响正式保存）
-  const setProviderDraft = (provider: string, draft: { apiKey?: string; baseUrl?: string }) => {
+  const setProviderDraft = (provider: string, draft: { baseUrl?: string }) => {
     providerDrafts.value[provider] = {
       ...providerDrafts.value[provider],
       ...draft,

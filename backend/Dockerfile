@@ -22,8 +22,8 @@ COPY prisma ./prisma/
 # 配置 npm 镜像源 - 这层会被缓存
 RUN npm config set registry https://mirrors.cloud.tencent.com/npm/
 
-# 第3层缓存：安装依赖（只有 package.json 变化时才重新执行）
-RUN npm install --legacy-peer-deps --no-audit --progress=false
+# 第3层缓存：安装依赖（只有 package.json/package-lock.json 变化时才重新执行）
+RUN npm ci --legacy-peer-deps --no-audit --progress=false
 
 # 第4层缓存：生成 Prisma Client（只有 schema 变化时才重新执行）
 RUN npx prisma generate
@@ -58,6 +58,8 @@ COPY --from=builder /app/prisma ./prisma
 
 # 复制启动脚本
 COPY scripts ./scripts
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x ./docker-entrypoint.sh
 
 # 暴露端口
 EXPOSE 4000
@@ -67,5 +69,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:4000/ || exit 1
 
 # 启动应用
+ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["node", "dist/main.js"]
-

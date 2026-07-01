@@ -140,7 +140,6 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useCopywritingStore } from '@/stores/copywriting'
 import { deconstructCopywriting, saveDeconstructionResult } from '@/api/copywriting'
-import { useAIStore } from '@/stores/ai'
 import { useCategoryStore } from '@/stores/category'
 
 const copywritingStore = useCopywritingStore()
@@ -211,8 +210,6 @@ const tagsStr = computed({
     }
   }
 })
-
-const aiStore = useAIStore()
 
 const analyzeText = async () => {
   if (!originalText.value.trim()) {
@@ -442,7 +439,6 @@ const saveAnalysis = async () => {
   }
 }
 </style>
-
 
 
 

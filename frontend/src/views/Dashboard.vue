@@ -77,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCopywritingStore } from '@/stores/copywriting'
 import { useCategoryStore } from '@/stores/category'
@@ -168,7 +168,7 @@ const navigateTo = (path: string) => {
   router.push(path)
 }
 
-const viewCopywriting = (id: string) => {
+const viewCopywriting = (_id: string) => {
   router.push(`/library`)
 }
 
@@ -406,8 +406,6 @@ onMounted(async () => {
   }
 }
 </style>
-
-
 
 
 

@@ -45,7 +45,3 @@ Dockerfile
 .dockerignore
 docker-compose*.yml
 
-# 脚本（不需要在构建阶段）
-scripts/*.js
-
-

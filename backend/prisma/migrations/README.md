@@ -1,5 +1,14 @@
 # 数据库迁移说明
 
+## Docker 一键部署
+
+Docker 部署使用 Prisma 标准迁移目录：
+
+- `20260701000000_init/migration.sql`：从当前 `schema.prisma` 生成的初始化迁移，用于空 MySQL 数据库首次部署。
+- 后端容器启动脚本会执行 `npx prisma migrate deploy`，自动创建/更新数据库结构。
+
+旧的独立 SQL 文件仅保留作历史说明；新增结构变更应通过新的 Prisma migration 子目录提交，不再依赖手动执行散落 SQL。
+
 ## 登录安全功能迁移 (add_login_security.sql)
 
 此迁移添加了登录安全相关的功能，包括：

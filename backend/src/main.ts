@@ -11,6 +11,11 @@ async function bootstrap() {
 
   try {
     const app = await NestFactory.create(AppModule);
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey || encryptionKey.trim().length < 16) {
+      logger.error('❌ ENCRYPTION_KEY 未配置或长度不足，无法安全保存/读取AI API Key');
+      process.exit(1);
+    }
 
     // 全局异常过滤器
     app.useGlobalFilters(new AllExceptionsFilter());
@@ -67,10 +72,9 @@ async function bootstrap() {
 
     // 检查关键配置
     const dbUrl = process.env.DATABASE_URL;
-    const aiKey = process.env.OPENAI_API_KEY;
     const jwtSecret = process.env.JWT_SECRET;
 
-    // 同时检查数据库中的激活AI配置（前端保存的配置）
+    // AI服务统一使用管理员在数据库中激活的全局配置
     let hasActiveAiConfig = false;
     try {
       const prisma = app.get(PrismaService);
@@ -79,20 +83,18 @@ async function bootstrap() {
         select: { id: true, provider: true, model: true }
       });
       hasActiveAiConfig = !!active;
-      if (!aiKey && hasActiveAiConfig && active) {
+      if (hasActiveAiConfig && active) {
         logger.log(`ℹ️ 检测到数据库中的激活AI配置：${active.provider} - ${active.model}`);
       }
     } catch (e) {
       logger.warn(`⚠️  无法检查数据库中的AI配置：${e?.message || e}`);
     }
 
-    const hasEnvAiKey = !!(aiKey && aiKey.trim() !== '');
-    const aiConfigured = hasEnvAiKey || hasActiveAiConfig;
-
     logger.log('=== 配置检查 ===');
     logger.log(`数据库: ${dbUrl ? '✅ 已配置' : '❌ 未配置'}`);
-    logger.log(`AI服务: ${aiConfigured ? '✅ 已配置' : '⚠️  未配置（AI功能将不可用）'}`);
+    logger.log(`AI服务: ${hasActiveAiConfig ? '✅ 已配置' : '⚠️  未配置（AI功能将不可用）'}`);
     logger.log(`JWT密钥: ${jwtSecret ? '✅ 已配置' : '❌ 未配置'}`);
+    logger.log(`AI密钥加密: ${encryptionKey && encryptionKey.trim().length >= 16 ? '✅ 已配置' : '❌ 未配置或长度不足'}`);
 
     if (!dbUrl) {
       logger.error('❌ DATABASE_URL 未配置，请在.env文件中配置数据库连接');
@@ -100,9 +102,12 @@ async function bootstrap() {
     if (!jwtSecret || jwtSecret === 'your-secret-key-change-this-in-production') {
       logger.warn('⚠️  JWT_SECRET 使用默认值，生产环境请修改为安全的密钥');
     }
-    if (!aiConfigured) {
-      logger.warn('⚠️  未发现有效的AI配置（环境变量或数据库激活配置均为空），AI功能将不可用');
-      logger.warn('   请在.env文件中配置OPENAI_API_KEY，或在前端系统设置中配置并激活');
+    if (!encryptionKey || encryptionKey.trim().length < 16) {
+      logger.error('❌ ENCRYPTION_KEY 未配置或长度不足，无法安全保存/读取AI API Key');
+    }
+    if (!hasActiveAiConfig) {
+      logger.warn('⚠️  未发现管理员激活的AI配置，AI功能将不可用');
+      logger.warn('   请管理员在前端系统设置中配置并激活AI服务');
     }
 
   } catch (error) {
@@ -112,8 +117,6 @@ async function bootstrap() {
   }
 }
 bootstrap();
-
-
 
 
 

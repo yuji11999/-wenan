@@ -1,11 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { resolveInitialAdminCredentials } from './admin-credentials';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const username = process.env.ADMIN_USERNAME || 'admin';
-  const password = process.env.ADMIN_PASSWORD || 'admin123';
+  const { username, password } = resolveInitialAdminCredentials();
 
   // 检查管理员是否已存在
   const existingAdmin = await prisma.user.findUnique({
@@ -31,8 +31,7 @@ async function main() {
 
   console.log('管理员账号创建成功！');
   console.log('用户名:', username);
-  console.log('密码:', password);
-  console.log('请登录后立即修改密码！');
+  console.log('请使用部署脚本生成的初始密码登录，并立即修改密码！');
 }
 
 main()
@@ -43,4 +42,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

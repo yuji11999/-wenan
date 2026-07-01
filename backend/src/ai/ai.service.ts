@@ -3,25 +3,24 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
 import * as crypto from 'crypto';
+import { assertSafeHttpUrl, createSafeAxiosAgents } from '../common/safe-url';
+import { getUpstreamErrorText, isResponseFormatUnsupported, PUBLIC_AI_UPSTREAM_ERROR } from '../common/ai-error';
 
 @Injectable()
 export class AiService {
-  private apiKey: string;
-  private baseUrl: string;
-  private model: string;
   private timeoutMs: number;
+  private readonly activeConfigSettingKey = 'ai.activeConfigId';
 
   constructor(private configService: ConfigService, private prisma: PrismaService) {
-    this.apiKey = this.configService.get('OPENAI_API_KEY') || '';
-    this.baseUrl =
-      this.configService.get('OPENAI_BASE_URL') || 'https://api.openai.com/v1';
-    this.model = this.configService.get('OPENAI_MODEL') || '';
     this.timeoutMs = Number(this.configService.get('AI_TIMEOUT_MS')) || 120000; // 默认120秒
   }
 
   // 生成 32 字节密钥：对任意长度的字符串做 SHA-256，保证长度正确
   private deriveKey(): Buffer {
-    const secret = process.env.ENCRYPTION_KEY || 'default-secret';
+    const secret = process.env.ENCRYPTION_KEY;
+    if (!secret || secret.trim().length < 16) {
+      throw new Error('ENCRYPTION_KEY 未配置或长度不足，无法解密AI API Key');
+    }
     return crypto.createHash('sha256').update(secret, 'utf8').digest(); // 32 bytes
   }
 
@@ -32,8 +31,7 @@ export class AiService {
       const key = this.deriveKey();
       const parts = encryptedApiKey.split(':');
       if (parts.length !== 2) {
-        // 如果格式不对，可能是未加密的旧数据
-        return encryptedApiKey;
+        throw new Error('invalid encrypted api key format');
       }
       const iv = Buffer.from(parts[0], 'hex');
       const encrypted = parts[1];
@@ -42,46 +40,39 @@ export class AiService {
       decrypted += decipher.final('utf8');
       return decrypted;
     } catch (error) {
-      // 如果解密失败，可能是旧数据未加密，直接返回
-      // 解密失败，使用原始值
-      return encryptedApiKey;
+      throw new Error('AI API Key 解密失败，请联系管理员重新保存配置');
     }
   }
 
-  // 
-  private async resolveOptions(opts?: { apiKey?: string; baseUrl?: string; model?: string; provider?: string }) {
-    // 如果没有提供API Key，尝试从数据库获取当前激活的配置
-    if (!opts?.apiKey) {
-      try {
-        const activeConfig = await this.prisma.aIConfig.findFirst({
-          where: { isActive: true }
-        });
-        
-        if (activeConfig) {
-          // 解密API Key
-          const decryptedApiKey = activeConfig.apiKey ? this.decryptApiKey(activeConfig.apiKey) : '';
-          
-          return {
-            apiKey: decryptedApiKey.trim(),
-            baseUrl: (opts?.baseUrl || activeConfig.baseUrl || '').trim(),
-            model: (opts?.model || activeConfig.model || '').trim(),
-            provider: (opts?.provider || activeConfig.provider || '').trim(),
-          };
-        }
-      } catch (error) {
-        // 获取配置失败，使用环境变量配置
-      }
+  // 解析当前可用的AI配置。常规业务调用只允许使用管理员激活的全局配置。
+  private async resolveOptions() {
+    const activeConfigId = await this.prisma.setting.findUnique({
+      where: { key: this.activeConfigSettingKey },
+    });
+    let activeConfig = activeConfigId?.value
+      ? await this.prisma.aIConfig.findFirst({ where: { id: activeConfigId.value } })
+      : null;
+
+    if (!activeConfig) {
+      activeConfig = await this.prisma.aIConfig.findFirst({
+        where: { isActive: true }
+      });
     }
-    
-    // 使用请求头传递的配置或环境变量配置
-    const result = {
-      apiKey: (opts?.apiKey || this.apiKey || '').trim(),
-      baseUrl: (opts?.baseUrl || this.baseUrl || '').trim(),
-      model: (opts?.model || this.model || '').trim(),
-      provider: (opts?.provider || '').trim(),
+
+    if (!activeConfig) {
+      throw new Error('未找到有效的AI配置。请管理员在系统设置中配置并激活AI服务。');
     }
-    
-    return result;
+
+    const decryptedApiKey = activeConfig.apiKey ? this.decryptApiKey(activeConfig.apiKey) : '';
+    const baseUrl = (activeConfig.baseUrl || '').trim();
+    await assertSafeHttpUrl(baseUrl);
+
+    return {
+      apiKey: decryptedApiKey.trim(),
+      baseUrl,
+      model: (activeConfig.model || '').trim(),
+      provider: (activeConfig.provider || '').trim(),
+    };
   }
 
   private async getSetting(key: string): Promise<string> {
@@ -90,8 +81,8 @@ export class AiService {
   }
 
   // 文案拆解
-  async deconstructCopywriting(content: string, opts?: { apiKey?: string; baseUrl?: string; model?: string }) {
-    const { apiKey, baseUrl, model } = await this.resolveOptions(opts);
+  async deconstructCopywriting(content: string) {
+    const { apiKey } = await this.resolveOptions();
     // 检查API密钥是否配置
     if (!apiKey || apiKey.trim() === '') {
       throw new Error('未找到有效的AI配置。请在系统设置中选择并激活一个AI服务配置。');
@@ -118,7 +109,7 @@ ${content}
       const systemMessage = (await this.getSetting('prompt.system')).trim() || '你是短视频文案分析与创作专家。请务必只返回JSON格式的数据，不要包含任何额外的文字、解释或Markdown格式。';
       
       try {
-        const response = await this.callAI(defaultPrompt, { apiKey, baseUrl, model }, systemMessage);
+        const response = await this.callAI(defaultPrompt, systemMessage);
         return this.parseJsonResponse(response);
       } catch (error) {
         throw new Error(`AI文案拆解失败: ${error.message}`);
@@ -129,7 +120,7 @@ ${content}
     const systemMessage = (await this.getSetting('prompt.system')).trim() || undefined;
 
     try {
-      const response = await this.callAI(prompt, { apiKey, baseUrl, model }, systemMessage);
+      const response = await this.callAI(prompt, systemMessage);
       return this.parseJsonResponse(response);
     } catch (error) {
       throw new Error(`AI文案拆解失败: ${error.message}`);
@@ -137,8 +128,8 @@ ${content}
   }
 
   // 分析文案（爆款分析）
-  async analyzeCopywriting(content: string, opts?: { apiKey?: string; baseUrl?: string; model?: string }) {
-    const { apiKey, baseUrl, model } = await this.resolveOptions(opts);
+  async analyzeCopywriting(content: string) {
+    const { apiKey } = await this.resolveOptions();
     if (!apiKey || apiKey.trim() === '') {
       throw new Error('未找到有效的AI配置。请在系统设置中选择并激活一个AI服务配置。');
     }
@@ -164,7 +155,7 @@ ${content}
       const systemMessage = (await this.getSetting('prompt.system')).trim() || '你是短视频文案分析与创作专家。请务必只返回JSON格式的数据，不要包含任何额外的文字、解释或Markdown格式。';
       
       try {
-        const response = await this.callAI(defaultPrompt, { apiKey, baseUrl, model }, systemMessage);
+        const response = await this.callAI(defaultPrompt, systemMessage);
         return this.parseJsonResponse(response);
       } catch (error) {
         throw new Error(`AI爆款分析失败: ${error.message}`);
@@ -175,7 +166,7 @@ ${content}
     const systemMessage = (await this.getSetting('prompt.system')).trim() || undefined;
 
     try {
-      const response = await this.callAI(prompt, { apiKey, baseUrl, model }, systemMessage);
+      const response = await this.callAI(prompt, systemMessage);
       return this.parseJsonResponse(response);
     } catch (error) {
       throw new Error(`AI爆款分析失败: ${error.message}`);
@@ -183,8 +174,8 @@ ${content}
   }
 
   // 优化文案
-  async optimizeCopywriting(content: string, opts?: { apiKey?: string; baseUrl?: string; model?: string }) {
-    const { apiKey, baseUrl, model } = await this.resolveOptions(opts);
+  async optimizeCopywriting(content: string) {
+    const { apiKey } = await this.resolveOptions();
     if (!apiKey || apiKey.trim() === '') {
       throw new Error('未找到有效的AI配置。请在系统设置中选择并激活一个AI服务配置。');
     }
@@ -211,7 +202,7 @@ ${content}
       const systemMessage = (await this.getSetting('prompt.system')).trim() || '你是短视频文案分析与创作专家。请务必只返回JSON格式的数据，不要包含任何额外的文字、解释或Markdown格式。';
       
       try {
-        const response = await this.callAI(defaultPrompt, { apiKey, baseUrl, model }, systemMessage);
+        const response = await this.callAI(defaultPrompt, systemMessage);
         return this.parseJsonResponse(response);
       } catch (error) {
         throw new Error(`AI文案优化失败: ${error.message}`);
@@ -222,7 +213,7 @@ ${content}
     const systemMessage = (await this.getSetting('prompt.system')).trim() || undefined;
 
     try {
-      const response = await this.callAI(prompt, { apiKey, baseUrl, model }, systemMessage);
+      const response = await this.callAI(prompt, systemMessage);
       return this.parseJsonResponse(response);
     } catch (error) {
       throw new Error(`AI文案优化失败: ${error.message}`);
@@ -232,9 +223,8 @@ ${content}
   // 仿写文案
   async rewriteCopywriting(
     params: { reference: string; newContent: string; type: string },
-    opts?: { apiKey?: string; baseUrl?: string; model?: string },
   ) {
-    const { apiKey, baseUrl, model } = await this.resolveOptions(opts);
+    const { apiKey } = await this.resolveOptions();
     if (!apiKey || apiKey.trim() === '') {
       throw new Error('未找到有效的AI配置。请在系统设置中选择并激活一个AI服务配置。');
     }
@@ -287,7 +277,7 @@ ${newContent}
       const systemMessage = (await this.getSetting('prompt.system')).trim() || '你是短视频文案分析与创作专家。请务必只返回JSON格式的数据，不要包含任何额外的文字、解释或Markdown格式。';
       
       try {
-        const response = await this.callAI(defaultPrompt, { apiKey, baseUrl, model }, systemMessage);
+        const response = await this.callAI(defaultPrompt, systemMessage);
         return this.parseJsonResponse(response);
       } catch (error) {
         throw new Error(`AI文案仿写失败: ${error.message}`);
@@ -302,7 +292,7 @@ ${newContent}
     const systemMessage = (await this.getSetting('prompt.system')).trim() || undefined;
 
     try {
-      const response = await this.callAI(prompt, { apiKey, baseUrl, model }, systemMessage);
+      const response = await this.callAI(prompt, systemMessage);
       return this.parseJsonResponse(response);
     } catch (error) {
       throw new Error(`AI文案仿写失败: ${error.message}`);
@@ -312,10 +302,9 @@ ${newContent}
   // 调用AI接口
   private async callAI(
     prompt: string,
-    opts?: { apiKey?: string; baseUrl?: string; model?: string; provider?: string },
     systemMessage?: string,
   ): Promise<string> {
-    const { apiKey, baseUrl, model, provider } = await this.resolveOptions(opts);
+    const { apiKey, baseUrl, model, provider } = await this.resolveOptions();
     
     // 构建请求体，尝试使用 response_format，如果失败则移除
     const requestBody: any = {
@@ -330,37 +319,39 @@ ${newContent}
       max_tokens: 2000,
     };
     
-    try {
-      const endpoint = this.resolveChatCompletionsEndpoint(baseUrl);
-      
-      // 先尝试使用 response_format（仅支持部分模型）
-      let tryJsonFormat = true;
-      if (tryJsonFormat) {
-        requestBody.response_format = { type: 'json_object' };
+    const endpoint = this.resolveChatCompletionsEndpoint(baseUrl);
+
+    // 先尝试使用 response_format（仅支持部分模型）
+    let tryJsonFormat = true;
+    if (tryJsonFormat) {
+      requestBody.response_format = { type: 'json_object' };
+    }
+
+    const makeHeaders = (useGoogleHeader = false) => {
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (useGoogleHeader || provider === 'gemini' || /generativelanguage\.googleapis\.com/i.test(baseUrl)) {
+        headers['x-goog-api-key'] = apiKey;
+      } else {
+        headers['Authorization'] = `Bearer ${apiKey}`;
       }
-      
-      const makeHeaders = (useGoogleHeader = false) => {
-        const headers: any = { 'Content-Type': 'application/json' };
-        if (useGoogleHeader || provider === 'gemini' || /generativelanguage\.googleapis\.com/i.test(baseUrl)) {
-          headers['x-goog-api-key'] = apiKey;
-        } else {
-          headers['Authorization'] = `Bearer ${apiKey}`;
-        }
-        return headers;
-      };
+      return headers;
+    };
 
-      const doRequest = async (useGoogleHeader = false) => axios.post(
-        endpoint,
-        requestBody,
-        {
-          headers: makeHeaders(useGoogleHeader),
-          timeout: this.timeoutMs,
-          timeoutErrorMessage: `AI请求超时（>${this.timeoutMs}ms）`,
-          maxBodyLength: Infinity,
-          maxContentLength: Infinity,
-        },
-      );
+    const doRequest = async (body = requestBody, useGoogleHeader = false) => axios.post(
+      endpoint,
+      body,
+      {
+        headers: makeHeaders(useGoogleHeader),
+        timeout: this.timeoutMs,
+        timeoutErrorMessage: `AI请求超时（>${this.timeoutMs}ms）`,
+        maxRedirects: 0,
+        maxBodyLength: 1024 * 1024 * 5,
+        maxContentLength: 1024 * 1024 * 5,
+        ...createSafeAxiosAgents(),
+      },
+    );
 
+    try {
       // 第一次请求（根据provider自动选择鉴权方式）
       let response = await doRequest();
 
@@ -375,15 +366,20 @@ ${newContent}
       if (error.response) {
         // API返回了错误响应
         const status = error.response.status;
-        const errorData = error.response.data?.error;
-        const message = errorData?.message || error.message;
+        const message = getUpstreamErrorText(error);
         
         // 检查是否是 response_format 不支持的错误
-        if (message && (
-          message.includes('response_format') || 
-          message.includes('json_object') ||
-          message.includes('not supported')
-        )) {
+        if (isResponseFormatUnsupported(error)) {
+          const retryBody = { ...requestBody };
+          delete retryBody.response_format;
+          try {
+            const retryResp = await doRequest(retryBody);
+            if (retryResp?.data?.choices?.[0]?.message?.content) {
+              return retryResp.data.choices[0].message.content;
+            }
+          } catch (retryError) {
+            error = retryError;
+          }
         }
 
         // 如果是Gemini且鉴权失败，自动切换到 x-goog-api-key 再试一次
@@ -396,8 +392,10 @@ ${newContent}
                 headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
                 timeout: this.timeoutMs,
                 timeoutErrorMessage: `AI请求超时（>${this.timeoutMs}ms）`,
-                maxBodyLength: Infinity,
-                maxContentLength: Infinity,
+                maxRedirects: 0,
+                maxBodyLength: 1024 * 1024 * 5,
+                maxContentLength: 1024 * 1024 * 5,
+                ...createSafeAxiosAgents(),
               },
             );
             if (retryResp?.data?.choices?.[0]?.message?.content) {
@@ -414,10 +412,8 @@ ${newContent}
           throw new Error('AI API调用频率超限，请稍后重试');
         } else if (status === 500) {
           throw new Error('AI服务暂时不可用，请稍后重试');
-        } else if (status === 400 && message.includes('response_format')) {
-          throw new Error(`当前模型不支持JSON格式参数，请确保提示词中明确要求返回JSON格式。错误详情: ${message}`);
         } else {
-          throw new Error(`AI API调用失败 (${status}): ${message}`);
+          throw new Error(`AI API调用失败 (${status}): ${PUBLIC_AI_UPSTREAM_ERROR}`);
         }
       } else if (error.code === 'ECONNABORTED') {
         throw new Error(`AI请求超时（>${this.timeoutMs}ms），请检查网关响应或增大超时时间`);
@@ -501,7 +497,3 @@ ${newContent}
     }
   }
 }
-
-
-
-

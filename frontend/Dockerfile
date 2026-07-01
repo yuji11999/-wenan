@@ -14,7 +14,7 @@ COPY package*.json ./
 RUN npm config set registry https://mirrors.cloud.tencent.com/npm/
 
 # 安装依赖
-RUN npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false
+RUN npm ci --legacy-peer-deps --no-audit --progress=false
 
 # 复制源代码
 COPY . .
@@ -22,8 +22,8 @@ COPY . .
 # 清除 Vite 缓存，确保每次构建都是最新的
 RUN rm -rf node_modules/.vite .vite
 
-# 构建应用（生产环境，跳过类型检查以避免 vue-tsc 版本问题）
-RUN npx vite build
+# 构建应用（包含 vue-tsc 类型检查）
+RUN npm run build
 
 # 生产环境 - 使用 Nginx
 FROM nginx:alpine
@@ -46,4 +46,3 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 
 # 启动 nginx
 CMD ["nginx", "-g", "daemon off;"]
-

@@ -2,11 +2,18 @@ const axios = require('axios');
 
 async function testLogin() {
   try {
-    console.log('Testing login with admin/admin123...\n');
+    const username = process.env.ADMIN_USERNAME || 'admin';
+    const password = process.env.ADMIN_PASSWORD;
+
+    if (!password) {
+      throw new Error('ADMIN_PASSWORD is required for login testing.');
+    }
+
+    console.log(`Testing login with ${username}...\n`);
     
     const response = await axios.post('http://localhost:3002/auth/login', {
-      username: 'admin',
-      password: 'admin123'
+      username,
+      password
     }, {
       headers: {
         'Content-Type': 'application/json'

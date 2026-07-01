@@ -17,15 +17,8 @@ export class CopywritingService {
   async deconstruct(userId: string, deconstructDto: DeconstructDto, headers?: any) {
     const { content, videoUrl, industry } = deconstructDto;
 
-    // 从请求头读取可选的AI配置覆盖项
-    const aiOpts = {
-      apiKey: headers?.['x-ai-key'] || headers?.['X-AI-Key'],
-      baseUrl: headers?.['x-ai-base-url'] || headers?.['X-AI-Base-Url'],
-      model: headers?.['x-ai-model'] || headers?.['X-AI-Model'],
-    };
-
     // 调用AI进行拆解，只返回分析结果，不保存
-    const analysis = await this.aiService.deconstructCopywriting(content, aiOpts);
+    const analysis = await this.aiService.deconstructCopywriting(content);
 
     // 返回分析结果，附加用户提供的信息
     return {
@@ -83,14 +76,8 @@ export class CopywritingService {
   async analyze(analyzeDto: AnalyzeDto, headers?: any) {
     const { content } = analyzeDto;
 
-    const aiOpts = {
-      apiKey: headers?.['x-ai-key'] || headers?.['X-AI-Key'],
-      baseUrl: headers?.['x-ai-base-url'] || headers?.['X-AI-Base-Url'],
-      model: headers?.['x-ai-model'] || headers?.['X-AI-Model'],
-    };
-
     // 调用AI进行分析
-    const result = await this.aiService.analyzeCopywriting(content, aiOpts);
+    const result = await this.aiService.analyzeCopywriting(content);
 
     return result;
   }
@@ -99,14 +86,8 @@ export class CopywritingService {
   async optimize(optimizeDto: any, headers?: any) {
     const { content } = optimizeDto;
 
-    const aiOpts = {
-      apiKey: headers?.['x-ai-key'] || headers?.['X-AI-Key'],
-      baseUrl: headers?.['x-ai-base-url'] || headers?.['X-AI-Base-Url'],
-      model: headers?.['x-ai-model'] || headers?.['X-AI-Model'],
-    };
-
     // 调用AI进行优化
-    const result = await this.aiService.optimizeCopywriting(content, aiOpts);
+    const result = await this.aiService.optimizeCopywriting(content);
 
     return result;
   }
@@ -144,18 +125,12 @@ export class CopywritingService {
       rewriteType,
     } = rewriteDto;
 
-    const aiOpts = {
-      apiKey: headers?.['x-ai-key'] || headers?.['X-AI-Key'],
-      baseUrl: headers?.['x-ai-base-url'] || headers?.['X-AI-Base-Url'],
-      model: headers?.['x-ai-model'] || headers?.['X-AI-Model'],
-    };
-
     // 调用AI生成仿写，只返回结果，不保存
     const rewriteResult = await this.aiService.rewriteCopywriting({
       reference: referenceContent || '',
       newContent,
       type: rewriteType,
-    }, aiOpts);
+    });
 
     return {
       ...rewriteResult,
@@ -435,7 +410,6 @@ export class CopywritingService {
     }
   }
 }
-
 
 
 

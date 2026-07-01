@@ -4,7 +4,12 @@ const bcrypt = require('bcrypt');
 const prisma = new PrismaClient();
 
 async function main() {
+  const testPassword = process.env.ADMIN_PASSWORD;
+
   console.log('Checking users in database...\n');
+  if (!testPassword) {
+    console.log('ADMIN_PASSWORD not set; password match checks will be skipped.\n');
+  }
   
   const users = await prisma.user.findMany();
   
@@ -22,10 +27,10 @@ async function main() {
     console.log('Status:', user.status);
     console.log('Created:', user.createdAt);
     
-    // Test password 'admin123'
-    const testPassword = 'admin123';
-    const passwordMatch = await bcrypt.compare(testPassword, user.password);
-    console.log(`Password '${testPassword}' matches:`, passwordMatch);
+    if (testPassword) {
+      const passwordMatch = await bcrypt.compare(testPassword, user.password);
+      console.log('Provided ADMIN_PASSWORD matches:', passwordMatch);
+    }
     console.log('----------------------------\n');
   }
 }

@@ -278,7 +278,6 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { analyzeCopywriting, createCopywriting, getCopywritings, optimizeCopywriting } from '@/api/copywriting'
-import { useAIStore } from '@/stores/ai'
 import { useCopywritingStore } from '@/stores/copywriting'
 
 const referenceText = ref('')
@@ -315,7 +314,6 @@ interface AnalysisResult {
 
 const referenceAnalysis = ref<AnalysisResult | null>(null)
 const createAnalysis = ref<AnalysisResult | null>(null)
-const aiStore = useAIStore()
 const copywritingStore = useCopywritingStore()
 
 // 素材数据（从已保存的文案中提取）
@@ -989,7 +987,6 @@ const useOptimizedContent = () => {
   gap: 0.75rem;
 }
 </style>
-
 
 
 

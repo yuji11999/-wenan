@@ -64,9 +64,8 @@
                 <el-input
                   v-model="aiConfig.apiKey"
                   type="password"
-                  placeholder="输入API Key"
+                  :placeholder="apiKeyPlaceholder"
                   show-password
-  @input="onDraftChange('apiKey', aiConfig.apiKey)"
                 />
               </div>
 
@@ -973,7 +972,7 @@ import { useAIStore, providerConfigs } from '@/stores/ai'
 import { useCategoryStore } from '@/stores/category'
 import api from '@/api'
 import { getPrompts as apiGetPrompts, savePrompts as apiSavePrompts, type PromptsPayload } from '@/api/settings'
-import { getAIConfig } from '@/api/ai-config'
+import { fetchAIModels, testAIConfig } from '@/api/ai-config'
 import dayjs from 'dayjs'
 import {
   getCategories,
@@ -1079,95 +1078,35 @@ const availableModels = computed(() => {
   return aiStore.providerModels[aiConfig.value.provider] || []
 })
 
-// 模型描述
-const modelDescription = computed(() => {
-  const models = providerConfigs[aiConfig.value.provider]?.models || []
-  const model = models.find(m => m.value === aiConfig.value.model)
-  return model?.description || ''
-})
-
 // 从当前网关实时拉取模型列表
 const fetchModels = async () => {
   const provider = aiConfig.value.provider
-  const base = aiConfig.value.baseUrl.replace(/\/$/, '')
-  const key = aiConfig.value.apiKey
+  const saved = aiStore.savedConfigs.find(c => c.provider === provider && c.model === aiConfig.value.model)
+  const shouldUseStoredKey = saved?.hasApiKey && !aiConfig.value.apiKey
+  if (shouldUseStoredKey && aiConfig.value.baseUrl !== saved.baseUrl) {
+    ElMessage.warning({ message: 'API 地址已修改，请先保存配置或输入新的 API Key 后再刷新', duration: 2500 })
+    throw new Error('请先保存配置或输入新的 API Key')
+  }
+  const payload = shouldUseStoredKey
+    ? { configId: saved.id }
+    : {
+        provider,
+        baseUrl: aiConfig.value.baseUrl,
+        apiKey: aiConfig.value.apiKey,
+      }
 
-  // 根据 provider 构建候选，尽量避免无效探测导致控制台 401 噪音
-  const candidates: { url: string; headers: Record<string, string> }[] = []
-  if (provider === 'gemini') {
-    const bearer = key ? { Authorization: `Bearer ${key}` } : {}
-    const xgoog = key ? { 'x-goog-api-key': key } : {}
-    const root = base.replace(/\/v1$/, '')
-    
-    // 对于第三方网关（如 hk.12ai.org），优先尝试 Bearer token
-    if (base.includes('12ai.org') || base.includes('openai-proxy') || !base.includes('googleapis.com')) {
-      candidates.push({ url: `${base}/models`, headers: bearer })
-    }
-    
-    // 官方 Gemini API 风格
-    candidates.push({ url: `${root}/v1/models`, headers: xgoog })
-    candidates.push({ url: `${root}/v1beta/models`, headers: xgoog })
-    if (key) {
-      candidates.push({ url: `${root}/v1/models?key=${encodeURIComponent(key)}`, headers: {} })
-      candidates.push({ url: `${root}/v1beta/models?key=${encodeURIComponent(key)}`, headers: {} })
-    }
-  } else {
-    const bearer = key ? { Authorization: `Bearer ${key}` } : {}
-    const xapi = key ? { 'X-API-Key': key } : {}
-    const xapiLower = key ? { 'x-api-key': key } : {}
-    const apikey = key ? { 'api-key': key } : {}
-    // OpenAI 兼容 + 常见网关 Header 变体
-    candidates.push({ url: `${base}/models`, headers: bearer })
-    candidates.push({ url: `${base}/models`, headers: xapi })
-    candidates.push({ url: `${base}/models`, headers: xapiLower })
-    candidates.push({ url: `${base}/models`, headers: apikey })
+  let mapped: any[] = []
+  try {
+    mapped = await fetchAIModels(payload)
+  } catch (error: any) {
+    ElMessage.error({ message: `刷新失败：${error?.response?.data?.message || error?.message || '连接失败'}`, duration: 2000 })
+    throw error
   }
 
-  let data: any = null
-  let lastErr: any = null
-  for (const c of candidates) {
-    try {
-      const resp = await fetch(c.url, { headers: c.headers })
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      const text = await resp.text()
-      // 防止返回 HTML
-      if (text.trim().startsWith('<')) throw new Error('非JSON响应（可能是网关错误页）')
-      data = JSON.parse(text)
-      lastErr = null
-      break
-    } catch (e) {
-      lastErr = e
-      continue
-    }
-  }
-
-  if (lastErr) {
-    ElMessage.error({ message: `刷新失败：${lastErr?.message || lastErr}`, duration: 2000 })
-    return
-  }
-
-  // 解析不同返回结构
-  let items: any[] = []
-  if (Array.isArray(data?.data)) {
-    // OpenAI 风格
-    items = data.data
-  } else if (Array.isArray(data)) {
-    items = data
-  } else if (provider === 'gemini' && Array.isArray(data?.models)) {
-    // Gemini 官方风格 { models: [ { name: 'models/gemini-1.5-pro', displayName: '...' } ] }
-    items = data.models.map((m: any) => ({ id: (m.name || '').replace(/^models\//, ''), description: m.displayName || '' }))
-  }
-
-  if (items.length === 0) {
+  if (mapped.length === 0) {
     ElMessage.warning({ message: '网关未返回模型列表或格式不兼容', duration: 2000 })
-    return
+    throw new Error('网关未返回模型列表或格式不兼容')
   }
-
-  const mapped = items.map((m: any) => ({
-    label: m.id || m.name || String(m),
-    value: m.id || m.name || String(m),
-    description: m.description || ''
-  }))
 
   // 将刷新结果写入 store（持久化）并覆盖运行时的 providerConfigs
   aiStore.saveProviderModels(provider, mapped)
@@ -1177,11 +1116,23 @@ const fetchModels = async () => {
     aiConfig.value.model = mapped[0]?.value || ''
   }
   ElMessage.success({ message: '模型列表已刷新', duration: 1500 })
+  return mapped
 }
 
-// API Key 获取链接
-const apiKeyLink = computed(() => {
-  return providerConfigs[aiConfig.value.provider]?.apiKeyLink || '#'
+const currentSavedConfig = computed(() => {
+  return aiStore.savedConfigs.find(
+    c => c.provider === aiConfig.value.provider && c.model === aiConfig.value.model,
+  )
+})
+
+const apiKeyPlaceholder = computed(() => {
+  if (currentSavedConfig.value?.needsRekey) {
+    return '当前 API Key 需重新保存'
+  }
+  if (currentSavedConfig.value?.hasApiKey) {
+    return '已保存 API Key，留空则保留'
+  }
+  return '输入API Key'
 })
 
 // 从 store 中初始化 AI 配置表单
@@ -1191,7 +1142,7 @@ const initAiConfigFromStore = async () => {
   if (aiStore.currentConfig) {
     aiConfig.value.provider = aiStore.currentConfig.provider
     aiConfig.value.model = aiStore.currentConfig.model
-    aiConfig.value.apiKey = aiStore.currentConfig.apiKey
+    aiConfig.value.apiKey = ''
     aiConfig.value.baseUrl = aiStore.currentConfig.baseUrl
     
     // 确保模型选项包含当前模型
@@ -1219,13 +1170,7 @@ const initAiConfigFromStore = async () => {
       }]
     }
     
-    try {
-      // 获取完整配置，包括解密的 API Key
-      const fullConfig = await getAIConfig(first.id)
-      aiConfig.value.apiKey = fullConfig.apiKey || ''
-    } catch (error) {
-      aiConfig.value.apiKey = ''
-    }
+    aiConfig.value.apiKey = ''
   } else {
     // 如果没有任何已保存的配置，使用默认的 OpenAI 配置（但不填写 key）
     aiConfig.value.provider = 'openai'
@@ -1254,13 +1199,7 @@ const applySavedOrDefault = async () => {
   aiConfig.value.model = target.model
   aiConfig.value.baseUrl = target.baseUrl || ''
 
-  try {
-    // 精确加载该配置，获取解密后的 apiKey
-    const full = await getAIConfig(target.id)
-    aiConfig.value.apiKey = full.apiKey || ''
-  } catch {
-    aiConfig.value.apiKey = ''
-  }
+  aiConfig.value.apiKey = ''
 }
 
 // 切换服务商：若该服务商有保存过，显示保存值；否则全部为空
@@ -1275,12 +1214,7 @@ const onModelChange = async () => {
   const saved = aiStore.savedConfigs.find(c => c.provider === provider && c.model === aiConfig.value.model)
   if (saved) {
     aiConfig.value.baseUrl = saved.baseUrl || ''
-    try {
-      const full = await getAIConfig(saved.id)
-      aiConfig.value.apiKey = full.apiKey || ''
-    } catch {
-      aiConfig.value.apiKey = ''
-    }
+    aiConfig.value.apiKey = ''
   } else {
     aiConfig.value.apiKey = ''
     aiConfig.value.baseUrl = ''
@@ -1288,7 +1222,7 @@ const onModelChange = async () => {
 }
 
 // 监听输入，实时保存厂商草稿，避免切换模型/刷新列表导致输入丢失
-const onDraftChange = (field: 'apiKey' | 'baseUrl', value: string) => {
+const onDraftChange = (field: 'baseUrl', value: string) => {
   const provider = aiConfig.value.provider
   aiStore.setProviderDraft(provider, { [field]: value })
 }
@@ -1443,11 +1377,6 @@ const pendingUserCount = computed(() => {
   return allUsers.value.filter(u => u.status === 'pending').length
 })
 
-// 筛选后的用户列表
-const users = computed(() => {
-  return allUsers.value.filter(u => u.status === 'pending')
-})
-
 const filteredUsers = computed(() => {
   if (userFilter.value === 'pending') {
     return allUsers.value.filter(u => u.status === 'pending')
@@ -1476,11 +1405,6 @@ const editForm = ref({
 // 待审核数量
 const pendingShareCount = computed(() => {
   return allMaterials.value.filter(m => m.shareStatus === 'pending').length
-})
-
-// 筛选后的素材列表
-const shareRequests = computed(() => {
-  return allMaterials.value.filter(m => m.shareStatus === 'pending')
 })
 
 const filteredMaterials = computed(() => {
@@ -1796,7 +1720,10 @@ watch(materialFilter, (newFilter) => {
 
 const saveAiConfig = async () => {
   // 验证必填项
-  if (!aiConfig.value.apiKey) {
+  const existing = aiStore.savedConfigs.find(
+    c => c.provider === aiConfig.value.provider && c.model === aiConfig.value.model
+  )
+  if (!aiConfig.value.apiKey && (!existing?.hasApiKey || existing?.needsRekey)) {
     ElMessage.error({ message: '请输入 API Key', duration: 2000 })
     return
   }
@@ -1806,32 +1733,23 @@ const saveAiConfig = async () => {
   const modelConfig = providerConfig?.models.find(m => m.value === aiConfig.value.model)
 
   try {
-    // 保存到 AI store（后端）
-    await aiStore.saveConfig({
+    const payload: any = {
       provider: aiConfig.value.provider,
       providerName: providerConfig?.name || aiConfig.value.provider,
       model: aiConfig.value.model,
       modelName: modelConfig?.label || aiConfig.value.model,
-      apiKey: aiConfig.value.apiKey,
       baseUrl: aiConfig.value.baseUrl
-    })
+    }
+    if (aiConfig.value.apiKey) {
+      payload.apiKey = aiConfig.value.apiKey
+    }
+
+    // 保存到 AI store（后端）
+    await aiStore.saveConfig(payload)
 
     ElMessage.success({ message: 'AI 配置已保存', duration: 1500 })
   } catch (error: any) {
     ElMessage.error({ message: error?.response?.data?.message || '保存配置失败', duration: 2000 })
-  }
-}
-
-// 选择模型
-const onModelSelect = () => {
-  const config = aiStore.currentConfig
-  if (config) {
-    ElMessage.success({ message: `已切换到 ${config.providerName} - ${config.modelName}`, duration: 1500 })
-    // 同步左侧表单显示为当前配置
-    aiConfig.value.provider = config.provider
-    aiConfig.value.model = config.model
-    aiConfig.value.baseUrl = config.baseUrl
-    aiConfig.value.apiKey = config.apiKey || ''
   }
 }
 
@@ -1850,95 +1768,6 @@ const testConnection = async () => {
     })
   } catch {
     // 错误已在 fetchModels 内部提示
-  }
-}
-
-// 静默测试单个配置（复用fetchModels的逻辑但不显示错误消息）
-const testSingleConfigSilently = async (provider: string, baseUrl: string, apiKey: string): Promise<boolean> => {
-  const base = baseUrl.replace(/\/$/, '')
-  const key = apiKey
-
-  // 根据 provider 构建候选，尽量避免无效探测导致控制台 401 噪音
-  const candidates: { url: string; headers: Record<string, string> }[] = []
-  if (provider === 'gemini') {
-    const bearer = key ? { Authorization: `Bearer ${key}` } : {}
-    const xgoog = key ? { 'x-goog-api-key': key } : {}
-    const root = base.replace(/\/v1$/, '')
-    
-    // 对于第三方网关（如 hk.12ai.org），优先尝试 Bearer token
-    if (baseUrl.includes('12ai.org') || baseUrl.includes('openai-proxy') || !baseUrl.includes('googleapis.com')) {
-      candidates.push({ url: `${base}/models`, headers: bearer })
-    }
-    
-    // 官方 Gemini API 风格
-    candidates.push({ url: `${root}/v1/models`, headers: xgoog })
-    candidates.push({ url: `${root}/v1beta/models`, headers: xgoog })
-    if (key) {
-      candidates.push({ url: `${root}/v1/models?key=${encodeURIComponent(key)}`, headers: {} })
-      candidates.push({ url: `${root}/v1beta/models?key=${encodeURIComponent(key)}`, headers: {} })
-    }
-  } else {
-    const bearer = key ? { Authorization: `Bearer ${key}` } : {}
-    const xapi = key ? { 'X-API-Key': key } : {}
-    const xapiLower = key ? { 'x-api-key': key } : {}
-    const apikey = key ? { 'api-key': key } : {}
-    // OpenAI 兼容 + 常见网关 Header 变体
-    candidates.push({ url: `${base}/models`, headers: bearer })
-    candidates.push({ url: `${base}/models`, headers: xapi })
-    candidates.push({ url: `${base}/models`, headers: xapiLower })
-    candidates.push({ url: `${base}/models`, headers: apikey })
-  }
-
-  for (const c of candidates) {
-    try {
-      const resp = await fetch(c.url, { headers: c.headers })
-      if (!resp.ok) continue
-      const text = await resp.text()
-      // 防止返回 HTML
-      if (text.trim().startsWith('<')) continue
-      // 尝试解析JSON，确保是有效响应
-      JSON.parse(text)
-      return true
-    } catch (e) {
-      // 静默跳过，不输出错误
-      continue
-    }
-  }
-  return false
-}
-
-// 保守的单配置测试（只测试最常用的认证方式，减少401错误）
-const testSingleConfigConservatively = async (provider: string, baseUrl: string, apiKey: string): Promise<boolean> => {
-  const base = baseUrl.replace(/\/$/, '')
-  
-  try {
-    let url = ''
-    let headers: Record<string, string> = {}
-    
-    // 根据服务商选择最常用的认证方式
-    if (provider === 'gemini') {
-      const root = base.replace(/\/v1$/, '')
-      url = `${root}/v1/models`
-      headers = { 'x-goog-api-key': apiKey }
-    } else {
-      // 对于其他服务商，优先使用Bearer认证（最常见）
-      url = `${base}/models`
-      headers = { 'Authorization': `Bearer ${apiKey}` }
-    }
-
-    const resp = await fetch(url, { headers })
-    if (!resp.ok) return false
-    
-    const text = await resp.text()
-    // 防止返回 HTML
-    if (text.trim().startsWith('<')) return false
-    
-    // 尝试解析JSON，确保是有效响应
-    JSON.parse(text)
-    return true
-  } catch (e) {
-    // 静默处理所有错误
-    return false
   }
 }
 
@@ -1968,19 +1797,8 @@ const testAllConfigs = async () => {
   const total = configsToTest.length
   
   for (const cfg of configsToTest) {
-    // 获取解密后的 API Key
-    let apiKey = ''
-    try {
-      const full = await getAIConfig(cfg.id)
-      apiKey = full.apiKey || ''
-    } catch (err) {
-      // 无法获取配置详情，跳过
-      skipped += 1
-      continue
-    }
-
     // 检查配置完整性
-    if (!apiKey || !cfg.baseUrl) {
+    if (!cfg.hasApiKey || !cfg.baseUrl) {
       skipped += 1
       continue
     }
@@ -1992,10 +1810,12 @@ const testAllConfigs = async () => {
     }
 
     try {
-      // 使用更保守的测试方法：只测试最可能成功的一种方式
-      const isConnected = await testSingleConfigConservatively(cfg.provider, cfg.baseUrl, apiKey)
-      
-      if (isConnected) {
+      const result = await testAIConfig({ configId: cfg.id })
+
+      if (result.connected) {
+        if (result.models?.length) {
+          aiStore.saveProviderModels(cfg.provider, result.models)
+        }
         // 测试成功，添加到已连接列表
         aiStore.upsertTestedConnection({
           provider: cfg.provider,
@@ -2031,37 +1851,13 @@ const useTestedConnection = async (conn: any) => {
   let config = aiStore.savedConfigs.find(c => c.provider === conn.provider && c.model === conn.model)
   
   try {
-    // 如果配置不存在，先自动保存
     if (!config) {
-      // 从草稿或当前表单获取API Key
-      let apiKey = aiStore.providerDrafts[conn.provider]?.apiKey || aiConfig.value.apiKey || ''
-      
-      // 如果没有API Key，尝试从同服务商的其他配置获取
-      if (!apiKey) {
-        const sameProviderConfig = aiStore.savedConfigs.find(c => c.provider === conn.provider)
-        if (sameProviderConfig) {
-          try {
-            const full = await getAIConfig(sameProviderConfig.id)
-            apiKey = full.apiKey || ''
-          } catch (e) {
-            // 获取失败，继续使用空key
-          }
-        }
-      }
-
-      // 自动保存配置
-      await aiStore.saveConfig({
-        provider: conn.provider,
-        providerName: conn.providerName,
-        model: conn.model,
-        modelName: conn.modelName,
-        apiKey: apiKey,
-        baseUrl: conn.baseUrl,
-        isActive: true  // 设置为激活状态
-      })
-      
-      // 重新查找配置
-      config = aiStore.savedConfigs.find(c => c.provider === conn.provider && c.model === conn.model)
+      aiConfig.value.provider = conn.provider
+      aiConfig.value.model = conn.model
+      aiConfig.value.baseUrl = conn.baseUrl
+      aiConfig.value.apiKey = ''
+      ElMessage.warning({ message: '请确认并保存该 AI 配置后再启用', duration: 2500 })
+      return
     } else {
       // 如果配置存在，直接设置为当前配置
       await aiStore.setCurrentConfig(config.id)
@@ -2072,15 +1868,7 @@ const useTestedConnection = async (conn: any) => {
     aiConfig.value.model = conn.model
     aiConfig.value.baseUrl = conn.baseUrl
     
-    // 获取并显示API Key
-    if (config) {
-      try {
-        const full = await getAIConfig(config.id)
-        aiConfig.value.apiKey = full.apiKey || ''
-      } catch {
-        aiConfig.value.apiKey = ''
-      }
-    }
+    aiConfig.value.apiKey = ''
     
     ElMessage.success({ message: `✅ 已切换到 ${conn.providerName} - ${conn.modelName || conn.model}`, duration: 1500 })
     
@@ -2090,28 +1878,6 @@ const useTestedConnection = async (conn: any) => {
       duration: 5000,
       showClose: true
     })
-  }
-}
-
-// 删除模型
-const deleteModel = async (id: string) => {
-  try {
-    await ElMessageBox.confirm(
-      '确定要删除这个 AI 模型配置吗？',
-      '确认删除',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-
-    await aiStore.deleteConfig(id)
-    ElMessage.success({ message: '已删除配置', duration: 1500 })
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error({ message: error?.response?.data?.message || '删除配置失败', duration: 2000 })
-    }
   }
 }
 
@@ -3106,7 +2872,3 @@ const clearData = () => {
   font-weight: bold;
 }
 </style>
-
-
-
-
