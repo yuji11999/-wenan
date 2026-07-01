@@ -108,6 +108,19 @@ git pull
 
 前提：你需要有一个 Docker 镜像仓库，例如 Docker Hub、阿里云容器镜像服务、腾讯云 TCR 或其他私有 registry。
 
+当前 GitHub 仓库已配置 GitHub Actions，会在 `main` 分支推送后自动构建并推送到 GHCR：
+
+```env
+BACKEND_IMAGE=ghcr.io/yuji11999/short-video-backend:latest
+FRONTEND_IMAGE=ghcr.io/yuji11999/short-video-frontend:latest
+```
+
+如果 GHCR 包是私有的，服务器需要先登录：
+
+```bash
+docker login ghcr.io
+```
+
 ### 1. 本地或 CI 构建并推送镜像
 
 先登录镜像仓库：
